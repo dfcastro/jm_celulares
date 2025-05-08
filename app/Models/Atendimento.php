@@ -10,7 +10,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Atendimento extends Model
 {
     use HasFactory;
+    protected $fillable = [
+        'cliente_id',
+        'celular',
+        'problema_relatado',
+        'data_entrada',
+        'status',
+        'tecnico_id',
+        'data_conclusao',
+        'observacoes',
+        'codigo_consulta', // Adicione esta linha
+    ];
 
+    protected $casts = [
+        'data_entrada' => 'datetime', // Garante que data_entrada seja um objeto Carbon
+        'data_conclusao' => 'datetime', // Garante que data_conclusao seja um objeto Carbon (se aplicável)
+    ];
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);

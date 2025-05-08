@@ -3,7 +3,10 @@
 use App\Http\Controllers\AtendimentoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\EstoqueController;
+use App\Http\Controllers\EntradaEstoqueController;
+use App\Http\Controllers\SaidaEstoqueController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ConsultaStatusController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,12 +33,9 @@ Route::delete('/clientes/{cliente}', [ClienteController::class, 'destroy'])->nam
 Route::get('/clientes/{cliente}', [ClienteController::class, 'show'])->name('clientes.show');
 
 // Rotas para Atendimentos
-Route::get('/atendimentos', [AtendimentoController::class, 'index'])->name('atendimentos.index'); // Listar atendimentos
-Route::get('/atendimentos/novo', [AtendimentoController::class, 'create'])->name('atendimentos.create'); // Exibir formulário de novo atendimento
-Route::post('/atendimentos', [AtendimentoController::class, 'store'])->name('atendimentos.store'); // Salvar novo atendimento
-Route::get('/atendimentos/{atendimento}/editar', [AtendimentoController::class, 'edit'])->name('atendimentos.edit'); // Exibir formulário de edição
-Route::put('/atendimentos/{atendimento}', [AtendimentoController::class, 'update'])->name('atendimentos.update'); // Salvar atendimento editado
-Route::delete('/atendimentos/{atendimento}', [AtendimentoController::class, 'destroy'])->name('atendimentos.destroy'); // Excluir atendimento
+Route::resource('atendimentos', AtendimentoController::class);
+Route::get('/consultar-status', [ConsultaStatusController::class, 'index'])->name('consulta.index');
+Route::post('/consultar-status', [ConsultaStatusController::class, 'consultar'])->name('consulta.status');
 
 // Rotas para Estoque
 Route::get('/estoque', [EstoqueController::class, 'index'])->name('estoque.index'); // Listar estoque
@@ -45,3 +45,8 @@ Route::get('/estoque/{estoque}/editar', [EstoqueController::class, 'edit'])->nam
 Route::put('/estoque/{estoque}', [EstoqueController::class, 'update'])->name('estoque.update'); // Salvar peça editada
 Route::delete('/estoque/{estoque}', [EstoqueController::class, 'destroy'])->name('estoque.destroy'); // Excluir peça
 Route::get('/estoque/{estoque}', [EstoqueController::class, 'show'])->name('estoque.show');
+
+// Rotas para Entradas de Estoque
+Route::resource('entradas-estoque', EntradaEstoqueController::class);
+// Rotas para Saídas de Estoque
+Route::resource('saidas-estoque', SaidaEstoqueController::class);

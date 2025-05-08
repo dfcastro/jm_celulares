@@ -10,6 +10,14 @@ class SaidaEstoque extends Model
 {
     use HasFactory;
 
+    protected $fillable = [
+        'estoque_id',
+        'atendimento_id',
+        'quantidade',
+        'data_saida',
+        'observacoes',
+    ];
+
     public function estoque(): BelongsTo
     {
         return $this->belongsTo(Estoque::class);
@@ -17,6 +25,6 @@ class SaidaEstoque extends Model
 
     public function atendimento(): BelongsTo
     {
-        return $this->belongsTo(Atendimento::class);
+        return $this->belongsTo(Atendimento::class)->nullable();
     }
 }

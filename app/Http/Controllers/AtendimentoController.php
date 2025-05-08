@@ -6,6 +6,7 @@ use App\Models\Atendimento;
 use App\Models\Cliente; // Precisamos para o formulário de novo atendimento
 use App\Models\User; // Para listar os técnicos
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class AtendimentoController extends Controller
 {
@@ -33,19 +34,18 @@ class AtendimentoController extends Controller
      */
     public function store(Request $request)
     {
-        // Validação dos dados do formulário (opcional, mas recomendado)
         $request->validate([
             'cliente_id' => 'required|exists:clientes,id',
-            'celular' => 'required|string|max:255',
+            'celular' => 'required|string|max:20',
             'problema_relatado' => 'required|string',
             'data_entrada' => 'required|date',
             'tecnico_id' => 'nullable|exists:users,id',
         ]);
 
-        // Cria um código de consulta único
-        $codigoConsulta = uniqid('ATD_');
+        $atendimento = $request->all();
+        $atendimento['codigo_consulta'] = Str::random(10); // Gera um código aleatório de 10 caracteres
 
-        Atendimento::create(array_merge($request->all(), ['codigo_consulta' => $codigoConsulta]));
+        Atendimento::create($atendimento);
 
         return redirect()->route('atendimentos.index')->with('success', 'Atendimento registrado com sucesso!');
     }

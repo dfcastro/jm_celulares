@@ -10,6 +10,13 @@ class EntradaEstoque extends Model
 {
     use HasFactory;
 
+    protected $fillable = [
+        'estoque_id',
+        'quantidade',
+        'data_entrada',
+        'observacoes',
+    ];
+
     public function estoque(): BelongsTo
     {
         return $this->belongsTo(Estoque::class);
