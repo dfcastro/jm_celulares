@@ -10,6 +10,7 @@
     <div class="container mt-5">
         <h1>Nova Entrada de Estoque</h1>
 
+        
         <form action="{{ route('entradas-estoque.store') }}" method="POST">
             @csrf
             <div class="mb-3">
@@ -17,9 +18,13 @@
                 <select class="form-control" id="estoque_id" name="estoque_id" required>
                     <option value="">Selecione a Peça</option>
                     @foreach ($estoques as $estoque)
-                        <option value="{{ $estoque->id }}">{{ $estoque->nome }} ({{ $estoque->modelo_compativel ?? 'Modelo não especificado' }})</option>
+                        {{-- Adiciona selected se o ID da peça atual for igual a $selectedEstoqueId --}}
+                        <option value="{{ $estoque->id }}" {{ isset($selectedEstoqueId) && $estoque->id == $selectedEstoqueId ? 'selected' : '' }}>
+                            {{ $estoque->nome }} ({{ $estoque->modelo_compativel ?? 'Modelo não especificado' }})
+                        </option>
                     @endforeach
                 </select>
+                <small class="form-text text-muted">Selecione a peça que está entrando no estoque.</small>
             </div>
             <div class="mb-3">
                 <label for="quantidade" class="form-label">Quantidade</label>

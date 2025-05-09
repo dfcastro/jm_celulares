@@ -46,14 +46,21 @@ Route::get('/estoque/{estoque}/editar', [EstoqueController::class, 'edit'])->nam
 Route::put('/estoque/{estoque}', [EstoqueController::class, 'update'])->name('estoque.update'); // Salvar peça editada
 Route::delete('/estoque/{estoque}', [EstoqueController::class, 'destroy'])->name('estoque.destroy'); // Excluir peça
 Route::get('/estoque/{estoque}', [EstoqueController::class, 'show'])->name('estoque.show');
+Route::get('/estoque/{estoque}/historico', [EstoqueController::class, 'historicoPeca'])->name('estoque.historico_peca');
+// Rota para o histórico de movimentações unificado 
+Route::get('/estoque/historico-unificado', [EstoqueController::class, 'historicoUnificado'])->name('estoque.historico_unificado');
 
 // Rotas para Entradas de Estoque
 Route::get('/entradas-estoque', [EntradaEstoqueController::class, 'index'])->name('entradas-estoque.index');
 Route::get('/entradas-estoque/create', [EntradaEstoqueController::class, 'create'])->name('entradas-estoque.create');
 Route::post('/entradas-estoque', [EntradaEstoqueController::class, 'store'])->name('entradas-estoque.store');
 Route::get('/entradas-estoque/{entradas_estoque}', [EntradaEstoqueController::class, 'show'])->name('entradas-estoque.show');
-Route::get('/entradas-estoque/{entradas_estoque}/edit', [EntradaEstoqueController::class, 'edit'])->name('entradas-estoque.edit');
-Route::put('/entradas-estoque/{entradas_estoque}', [EntradaEstoqueController::class, 'update'])->name('entradas-estoque.update')->where('entradas_estoque', '[0-9]+');
-Route::delete('/entradas-estoque/{entradas_estoque}', [EntradaEstoqueController::class, 'destroy'])->name('entradas-estoque.destroy');
+//Route::get('/entradas-estoque/{entradas_estoque}/edit', [EntradaEstoqueController::class, 'edit'])->name('entradas-estoque.edit');
+//Route::put('/entradas-estoque/{entradas_estoque}', [EntradaEstoqueController::class, 'update'])->name('entradas-estoque.update')->where('entradas_estoque', '[0-9]+');
+Route::delete('/entradas-estoque/{entradas_estoque}', [App\Http\Controllers\EntradaEstoqueController::class, 'destroy'])->name('entradas-estoque.destroy');
+
+
 // Rotas para Saídas de Estoque
-Route::resource('saidas-estoque', SaidaEstoqueController::class);
+Route::resource('saidas-estoque', SaidaEstoqueController::class)->except([
+    'edit', 'update'
+]);

@@ -15,6 +15,7 @@
         @endif
 
         <a href="{{ route('entradas-estoque.create') }}" class="btn btn-primary mb-3">Nova Entrada</a>
+        <a href="{{ route('estoque.index') }}" class="btn btn-secondary mb-3">Voltar para Estoque</a>
 
         <table class="table table-striped">
             <thead>
@@ -35,7 +36,7 @@
                         <td>{{ $entrada->data_entrada->format('d/m/Y') }}</td>
                         <td>
                             <a href="{{ route('entradas-estoque.show', $entrada->id) }}" class="btn btn-info btn-sm">Detalhes</a>
-                            <a href="{{ route('entradas-estoque.edit', $entrada->id) }}" class="btn btn-warning btn-sm">Editar</a>
+                            
                             <form action="{{ route('entradas-estoque.destroy', $entrada->id) }}" method="POST" class="d-inline">
                                 @csrf
                                 @method('DELETE')

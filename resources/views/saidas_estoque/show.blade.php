@@ -29,7 +29,7 @@
                 <p class="card-text"><strong>Última atualização:</strong> {{ $saidaEstoque->updated_at->format('d/m/Y H:i:s') }}</p>
 
                 <a href="{{ route('saidas-estoque.index') }}" class="btn btn-primary">Voltar para Saídas</a>
-                <a href="{{ route('saidas-estoque.edit', $saidaEstoque->id) }}" class="btn btn-warning">Editar Saída</a>
+              
                 <form action="{{ route('saidas-estoque.destroy', $saidaEstoque->id) }}" method="POST" class="d-inline">
                     @csrf
                     @method('DELETE')

@@ -21,6 +21,11 @@
     <label for="modelo_compativel" class="form-label">Modelo Compatível (Opcional)</label>
     <input type="text" class="form-control" id="modelo_compativel" name="modelo_compativel" value="{{ $estoque->modelo_compativel }}">
 </div>
+<div class="mb-3">
+                <label for="numero_serie" class="form-label">Número de Série (Opcional)</label>
+                {{-- Preenche com o valor existente --}}
+                <input type="text" class="form-control" id="numero_serie" name="numero_serie" value="{{ $estoque->numero_serie }}">
+            </div>
             <div class="mb-3">
                 <label for="quantidade" class="form-label">Quantidade</label>
                 <input type="number" class="form-control" id="quantidade" name="quantidade" value="{{ $estoque->quantidade }}" min="0" required>

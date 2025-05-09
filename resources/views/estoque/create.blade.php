@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nova Peça no Estoque</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body>
     <div class="container mt-5">
         <h1>Nova Peça no Estoque</h1>
@@ -17,20 +19,23 @@
                 <input type="text" class="form-control" id="nome" name="nome" required>
             </div>
             <div class="mb-3">
-    <label for="modelo_compativel" class="form-label">Modelo Compatível (Opcional)</label>
-    <input type="text" class="form-control" id="modelo_compativel" name="modelo_compativel">
-</div>
-            <div class="mb-3">
-                <label for="quantidade" class="form-label">Quantidade</label>
-                <input type="number" class="form-control" id="quantidade" name="quantidade" value="0" min="0" required>
+                <label for="modelo_compativel" class="form-label">Modelo Compatível (Opcional)</label>
+                <input type="text" class="form-control" id="modelo_compativel" name="modelo_compativel">
             </div>
             <div class="mb-3">
+                <label for="numero_serie" class="form-label">Número de Série (Opcional)</label>
+                <input type="text" class="form-control" id="numero_serie" name="numero_serie">
+            </div>
+
+            <div class="mb-3">
                 <label for="preco_custo" class="form-label">Preço de Custo (Opcional)</label>
-                <input type="number" step="0.01" class="form-control" id="preco_custo" name="preco_custo" value="0.00" min="0">
+                <input type="number" step="0.01" class="form-control" id="preco_custo" name="preco_custo" value="0.00"
+                    min="0">
             </div>
             <div class="mb-3">
                 <label for="preco_venda" class="form-label">Preço de Venda (Opcional)</label>
-                <input type="number" step="0.01" class="form-control" id="preco_venda" name="preco_venda" value="0.00" min="0">
+                <input type="number" step="0.01" class="form-control" id="preco_venda" name="preco_venda" value="0.00"
+                    min="0">
             </div>
             <div class="mb-3">
                 <label for="estoque_minimo" class="form-label">Estoque Mínimo (Opcional)</label>
@@ -42,4 +47,5 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

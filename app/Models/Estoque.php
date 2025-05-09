@@ -13,6 +13,7 @@ class Estoque extends Model
     protected $fillable = [
         'nome',
         'modelo_compativel', // Adicionando o novo campo
+        'numero_serie',
         'quantidade',
         'preco_custo',
         'preco_venda',

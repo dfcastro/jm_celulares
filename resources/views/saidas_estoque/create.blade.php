@@ -9,7 +9,17 @@
 <body>
     <div class="container mt-5">
         <h1>Nova Saída de Estoque</h1>
-
+         {{-- BLOCO PARA EXIBIR ERROS DE VALIDAÇÃO --}}
+        @if ($errors->any())
+            <div class="alert alert-danger">
+                <ul>
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+        {{-- FIM BLOCO PARA EXIBIR ERROS --}}
         <form action="{{ route('saidas-estoque.store') }}" method="POST">
             @csrf
             <div class="mb-3">
@@ -17,7 +27,10 @@
                 <select class="form-control" id="estoque_id" name="estoque_id" required>
                     <option value="">Selecione a Peça</option>
                     @foreach ($estoques as $estoque)
-                        <option value="{{ $estoque->id }}">{{ $estoque->nome }} ({{ $estoque->modelo_compativel ?? 'Modelo não especificado' }}) - Quantidade: {{ $estoque->quantidade }}</option>
+                         {{-- Adiciona selected se o ID da peça atual for igual a $selectedEstoqueId --}}
+                        <option value="{{ $estoque->id }}" {{ isset($selectedEstoqueId) && $estoque->id == $selectedEstoqueId ? 'selected' : '' }}>
+                            {{ $estoque->nome }} ({{ $estoque->modelo_compativel ?? 'Modelo não especificado' }}) - Quantidade: {{ $estoque->quantidade }}
+                        </option>
                     @endforeach
                 </select>
                 <small class="form-text text-muted">Selecione a peça que está saindo do estoque.</small>
@@ -34,8 +47,12 @@
             </div>
             <div class="mb-3">
                 <label for="quantidade" class="form-label">Quantidade</label>
-                <input type="number" class="form-control" id="quantidade" name="quantidade" value="1" min="1" required>
+                <input type="number" class="form-control" id="quantidade" name="quantidade" value="{{ old('quantidade', 1) }}" min="1" required>
                 <small class="form-text text-muted">Informe a quantidade de peças que estão saindo.</small>
+                 {{-- Opcional: Exibir erro específico para o campo quantidade --}}
+                 @error('quantidade')
+                     <div class="text-danger">{{ $message }}</div>
+                 @enderror
             </div>
             <div class="mb-3">
                 <label for="data_saida" class="form-label">Data de Saída</label>
