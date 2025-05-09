@@ -11,18 +11,21 @@ return new class extends Migration
      *
      * @return void
      */
-    public function up()
-    {
-        Schema::create('entradas_estoque', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('estoque_id')->constrained('estoque');
-            $table->date('data_entrada');
-            $table->integer('quantidade');
-            $table->decimal('valor_unitario')->nullable();
-            $table->string('observacoes')->nullable();
-            $table->timestamps();
-        });
-    }
+    // database/migrations/2025_05_08_161056_create_entradas_estoque_table.php
+
+public function up()
+{
+    Schema::create('entradas_estoque', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('estoque_id')->constrained('estoque');
+        $table->date('data_entrada');
+        // Adicionando ->default(0) para garantir um valor inicial não nulo
+        $table->integer('quantidade')->default(0);
+        $table->decimal('valor_unitario')->nullable();
+        $table->string('observacoes')->nullable();
+        $table->timestamps();
+    });
+}
 
     /**
      * Reverse the migrations.
