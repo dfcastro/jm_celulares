@@ -10,11 +10,17 @@ class EntradaEstoque extends Model
 {
     use HasFactory;
 
+    protected $table = 'entradas_estoque';
+
     protected $fillable = [
         'estoque_id',
         'quantidade',
         'data_entrada',
         'observacoes',
+    ];
+
+    protected $casts = [
+        'data_entrada' => 'datetime',
     ];
 
     public function estoque(): BelongsTo

@@ -31,6 +31,7 @@ Route::get('/clientes/{cliente}/editar', [ClienteController::class, 'edit'])->na
 Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update'); // Salvar cliente editado
 Route::delete('/clientes/{cliente}', [ClienteController::class, 'destroy'])->name('clientes.destroy'); // Excluir cliente
 Route::get('/clientes/{cliente}', [ClienteController::class, 'show'])->name('clientes.show');
+Route::get('/busca-clientes', [ClienteController::class, 'autocomplete'])->name('clientes.autocomplete');
 
 // Rotas para Atendimentos
 Route::resource('atendimentos', AtendimentoController::class);
@@ -47,6 +48,12 @@ Route::delete('/estoque/{estoque}', [EstoqueController::class, 'destroy'])->name
 Route::get('/estoque/{estoque}', [EstoqueController::class, 'show'])->name('estoque.show');
 
 // Rotas para Entradas de Estoque
-Route::resource('entradas-estoque', EntradaEstoqueController::class);
+Route::get('/entradas-estoque', [EntradaEstoqueController::class, 'index'])->name('entradas-estoque.index');
+Route::get('/entradas-estoque/create', [EntradaEstoqueController::class, 'create'])->name('entradas-estoque.create');
+Route::post('/entradas-estoque', [EntradaEstoqueController::class, 'store'])->name('entradas-estoque.store');
+Route::get('/entradas-estoque/{entradas_estoque}', [EntradaEstoqueController::class, 'show'])->name('entradas-estoque.show');
+Route::get('/entradas-estoque/{entradas_estoque}/edit', [EntradaEstoqueController::class, 'edit'])->name('entradas-estoque.edit');
+Route::put('/entradas-estoque/{entradas_estoque}', [EntradaEstoqueController::class, 'update'])->name('entradas-estoque.update')->where('entradas_estoque', '[0-9]+');
+Route::delete('/entradas-estoque/{entradas_estoque}', [EntradaEstoqueController::class, 'destroy'])->name('entradas-estoque.destroy');
 // Rotas para Saídas de Estoque
 Route::resource('saidas-estoque', SaidaEstoqueController::class);

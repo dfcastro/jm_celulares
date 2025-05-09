@@ -23,7 +23,7 @@ class EntradaEstoqueController extends Controller
     public function create()
     {
         $estoques = Estoque::all();
-        return view('entradas_estoque.create', compact('estoques'));
+        return view('entradas-estoque.create', compact('estoques'));
     }
 
     /**
@@ -51,7 +51,7 @@ class EntradaEstoqueController extends Controller
      */
     public function show(EntradaEstoque $entradaEstoque)
     {
-        $entradaEstoque->load('estoque');
+        $entradaEstoque = EntradaEstoque::with('estoque')->findOrFail($entradaEstoque->id);
         return view('entradas_estoque.show', compact('entradaEstoque'));
     }
 

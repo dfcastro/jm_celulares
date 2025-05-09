@@ -66,4 +66,16 @@ class ClienteController extends Controller
         $cliente->delete(); // Excluir o cliente
         return redirect()->route('clientes.index')->with('success', 'Cliente excluído com sucesso!'); // Redirecionar e exibir mensagem
     }
+
+    public function autocomplete(Request $request)
+    {
+        $search = $request->get('search');
+        $clientes = Cliente::where('nome_completo', 'LIKE', '%' . $search . '%')
+                           ->orWhere('cpf_cnpj', 'LIKE', '%' . $search . '%')
+                           ->limit(10)
+                           ->get(['id', 'nome_completo', 'cpf_cnpj', 'telefone']); // Selecionando também o telefone
+    
+        return response()->json($clientes->toArray());
+    }
+
 }

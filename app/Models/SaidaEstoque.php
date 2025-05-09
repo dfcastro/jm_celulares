@@ -10,6 +10,8 @@ class SaidaEstoque extends Model
 {
     use HasFactory;
 
+    protected $table = 'saidas_estoque';
+
     protected $fillable = [
         'estoque_id',
         'atendimento_id',

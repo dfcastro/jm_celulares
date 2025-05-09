@@ -19,6 +19,7 @@ return new class extends Migration
             $table->date('data_entrada');
             $table->integer('quantidade');
             $table->decimal('valor_unitario')->nullable();
+            $table->string('observacoes')->nullable();
             $table->timestamps();
         });
     }
