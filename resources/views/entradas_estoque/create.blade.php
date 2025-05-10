@@ -1,3 +1,4 @@
+{{-- resources/views/entradas_estoque/create.blade.php --}}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -28,15 +29,16 @@
             </div>
             <div class="mb-3">
                 <label for="quantidade" class="form-label">Quantidade</label>
-                <input type="number" class="form-control" id="quantidade" name="quantidade" value="1" min="1" required>
+                <input type="number" class="form-control" id="quantidade" name="quantidade" value="{{ old('quantidade', 1) }}" min="1" required>
             </div>
+            {{-- NOVO/RE-ADICIONADO: Campo para seleção da data --}}
             <div class="mb-3">
                 <label for="data_entrada" class="form-label">Data de Entrada</label>
-                <input type="date" class="form-control" id="data_entrada" name="data_entrada" value="{{ date('Y-m-d') }}" required>
+                <input type="date" class="form-control" id="data_entrada" name="data_entrada" value="{{ old('data_entrada', date('Y-m-d')) }}" required>
             </div>
             <div class="mb-3">
                 <label for="observacoes" class="form-label">Observações (Opcional)</label>
-                <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                <textarea class="form-control" id="observacoes" name="observacoes" rows="3">{{ old('observacoes') }}</textarea>
             </div>
             <button type="submit" class="btn btn-primary">Registrar Entrada</button>
             <a href="{{ route('entradas-estoque.index') }}" class="btn btn-secondary">Cancelar</a>

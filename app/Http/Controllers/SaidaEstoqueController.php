@@ -7,6 +7,7 @@ use App\Models\Estoque;
 use App\Models\SaidaEstoque;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Carbon\Carbon;
 
 
 class SaidaEstoqueController extends Controller
@@ -41,43 +42,60 @@ class SaidaEstoqueController extends Controller
     /**
      * Store a newly created resource in storage.
      */
+ /**
+     * Store a newly created resource in storage.
+     */
     public function store(Request $request)
     {
-         // 1. Buscar a peça de estoque selecionada
-         $estoque = Estoque::find($request->estoque_id);
+        // 0. Validação inicial dos campos do formulário
+        $request->validate([
+            'estoque_id' => 'required|exists:estoque,id',
+            'atendimento_id' => 'nullable|exists:atendimentos,id',
+            'quantidade' => 'required|integer|min:1',
+            'data_saida' => 'required|date', // Apenas validação de data, sem hora
+            'observacoes' => 'nullable|string|max:255',
+        ]);
 
-         // Verificamos se a peça foi encontrada (embora 'exists' na validação já garanta isso)
-         if (!$estoque) {
-              // Isso não deve acontecer se a validação 'exists' funcionar, mas é uma salvaguarda
-              throw ValidationException::withMessages([
-                 'estoque_id' => 'A peça selecionada não foi encontrada.',
-              ]);
-         }
- 
-         // 2. Comparar a quantidade solicitada com a quantidade em estoque
-         // Garantimos que a quantidade em estoque é tratada como número
-         $quantidadeEmEstoque = (int) $estoque->quantidade;
-         $quantidadeSolicitada = (int) $request->quantidade;
- 
-         if ($quantidadeSolicitada > $quantidadeEmEstoque) {
-             // Se a quantidade solicitada for maior que a disponível, lançamos um erro de validação
-             throw ValidationException::withMessages([
-                 'quantidade' => 'A quantidade solicitada (' . $quantidadeSolicitada . ') excede a quantidade disponível em estoque (' . $quantidadeEmEstoque . ').',
-             ]);
-         }
- 
-         // --- FIM NOVA VALIDAÇÃO DE ESTOQUE ---
- 
- 
-         // Se a validação de estoque passou, podemos prosseguir para criar a saída
-         SaidaEstoque::create($request->all());
- 
-         // Decrementar a quantidade no estoque principal
-         // Usamos $quantidadeSolicitada que já foi validada e tratada como int
-         $estoque->decrement('quantidade', $quantidadeSolicitada);
- 
-         return redirect()->route('saidas-estoque.index')->with('success', 'Saída de estoque registrada com sucesso!');
-     
+        // 1. Buscar a peça de estoque selecionada
+        $estoque = Estoque::find($request->estoque_id);
+
+        if (!$estoque) {
+            throw ValidationException::withMessages([
+                'estoque_id' => 'A peça selecionada não foi encontrada.',
+            ]);
+        }
+
+        // 2. Comparar a quantidade solicitada com a quantidade em estoque
+        $quantidadeEmEstoque = (int) $estoque->quantidade;
+        $quantidadeSolicitada = (int) $request->quantidade;
+
+        if ($quantidadeSolicitada > $quantidadeEmEstoque) {
+            throw ValidationException::withMessages([
+                'quantidade' => 'A quantidade solicitada (' . $quantidadeSolicitada . ') excede a quantidade disponível em estoque (' . $quantidadeEmEstoque . ').',
+            ]);
+        }
+
+        // --- MODIFICADO: Combinar a data selecionada com a hora atual ---
+        // Pega a data do formulário (ex: "2025-05-10")
+        $dataSaidaFormulario = $request->input('data_saida');
+
+        // Cria um objeto Carbon a partir da data do formulário e define a hora para a hora atual
+        $dataCompleta = Carbon::parse($dataSaidaFormulario)
+                              ->setTime(Carbon::now()->hour, Carbon::now()->minute, Carbon::now()->second);
+
+        // Pega todos os outros dados da requisição
+        $dadosSaida = $request->except('data_saida'); // Remove data_saida da requisição original
+
+        // Adiciona a data_saida completa ao array de dados
+        $dadosSaida['data_saida'] = $dataCompleta;
+
+        // 3. Criar a saída de estoque com a data e hora ajustadas
+        SaidaEstoque::create($dadosSaida); // Usa o array $dadosSaida com a data e hora completas
+
+        // Decrementar a quantidade no estoque principal
+        $estoque->decrement('quantidade', $quantidadeSolicitada);
+
+        return redirect()->route('saidas-estoque.index')->with('success', 'Saída de estoque registrada com sucesso!');
     }
 
     /**

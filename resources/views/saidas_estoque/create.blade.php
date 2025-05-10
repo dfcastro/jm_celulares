@@ -1,3 +1,4 @@
+{{-- resources/views/saidas_estoque/create.blade.php --}}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -54,14 +55,15 @@
                      <div class="text-danger">{{ $message }}</div>
                  @enderror
             </div>
+            {{-- NOVO/RE-ADICIONADO: Campo para seleção da data --}}
             <div class="mb-3">
                 <label for="data_saida" class="form-label">Data de Saída</label>
-                <input type="date" class="form-control" id="data_saida" name="data_saida" value="{{ date('Y-m-d') }}" required>
+                <input type="date" class="form-control" id="data_saida" name="data_saida" value="{{ old('data_saida', date('Y-m-d')) }}" required>
                 <small class="form-text text-muted">Selecione a data em que a peça saiu do estoque.</small>
             </div>
             <div class="mb-3">
                 <label for="observacoes" class="form-label">Observações (Opcional)</label>
-                <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                <textarea class="form-control" id="observacoes" name="observacoes" rows="3">{{ old('observacoes') }}</textarea>
                 <small class="form-text text-muted">Adicione qualquer observação relevante sobre esta saída.</small>
             </div>
             <button type="submit" class="btn btn-primary">Registrar Saída</button>

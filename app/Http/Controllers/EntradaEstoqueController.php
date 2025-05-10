@@ -6,6 +6,8 @@ use App\Models\EntradaEstoque;
 use App\Models\Estoque;
 use Illuminate\Http\Request;
 
+use Carbon\Carbon;
+
 class EntradaEstoqueController extends Controller
 {
     /**
@@ -14,7 +16,7 @@ class EntradaEstoqueController extends Controller
     public function index()
     {
         $entradas = EntradaEstoque::with('estoque')->latest()->paginate(10);
-        return view('entradas_estoque.index', compact('entradas')); // <- Corrigir aqui também
+        return view('entradas_estoque.index', compact('entradas')); 
     }
 
     /**
@@ -38,17 +40,24 @@ class EntradaEstoqueController extends Controller
     {
         $request->validate([
             'estoque_id' => 'required|exists:estoque,id',
-            'quantidade' => 'required|integer|min:1', // <-- Esta linha já exige que seja um número >= 1
-            'data_entrada' => 'required|date',
+            'quantidade' => 'required|integer|min:1',
+            'data_entrada' => 'required|date', // Apenas validação de data, sem hora
             'observacoes' => 'nullable|string|max:255',
         ]);
 
-        // Aqui você cria a entrada. Como 'quantidade' é 'required' e 'integer'
-        // na validação, $request->quantidade já deve ser um número válido.
-        EntradaEstoque::create($request->all());
-
         $estoque = Estoque::findOrFail($request->estoque_id);
-        $estoque->increment('quantidade', $request->quantidade); // $request->quantidade deve ser numérico aqui
+
+        // --- MODIFICADO: Combinar a data selecionada com a hora atual ---
+        $dataEntradaFormulario = $request->input('data_entrada');
+        $dataCompleta = Carbon::parse($dataEntradaFormulario)
+                              ->setTime(Carbon::now()->hour, Carbon::now()->minute, Carbon::now()->second);
+
+        $dadosEntrada = $request->except('data_entrada');
+        $dadosEntrada['data_entrada'] = $dataCompleta;
+
+        EntradaEstoque::create($dadosEntrada);
+
+        $estoque->increment('quantidade', $request->quantidade);
 
         return redirect()->route('entradas-estoque.index')->with('success', 'Entrada de estoque registrada com sucesso!');
     }

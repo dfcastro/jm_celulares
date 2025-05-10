@@ -42,13 +42,16 @@ Route::post('/consultar-status', [ConsultaStatusController::class, 'consultar'])
 Route::get('/estoque', [EstoqueController::class, 'index'])->name('estoque.index'); // Listar estoque
 Route::get('/estoque/novo', [EstoqueController::class, 'create'])->name('estoque.create'); // Exibir formulário de nova peça
 Route::post('/estoque', [EstoqueController::class, 'store'])->name('estoque.store'); // Salvar nova peça
+
+// MUDE A ORDEM AQUI: A ROTA ESPECÍFICA DEVE VIR ANTES DO WILDCARD {estoque}
+Route::get('/estoque/historico-unificado', [EstoqueController::class, 'historicoUnificado'])->name('estoque.historico_unificado'); // Rota para o histórico de movimentações unificado
+
 Route::get('/estoque/{estoque}/editar', [EstoqueController::class, 'edit'])->name('estoque.edit'); // Exibir formulário de edição
 Route::put('/estoque/{estoque}', [EstoqueController::class, 'update'])->name('estoque.update'); // Salvar peça editada
 Route::delete('/estoque/{estoque}', [EstoqueController::class, 'destroy'])->name('estoque.destroy'); // Excluir peça
-Route::get('/estoque/{estoque}', [EstoqueController::class, 'show'])->name('estoque.show');
+Route::get('/estoque/{estoque}', [EstoqueController::class, 'show'])->name('estoque.show'); // Mantenha esta depois da anterior
 Route::get('/estoque/{estoque}/historico', [EstoqueController::class, 'historicoPeca'])->name('estoque.historico_peca');
-// Rota para o histórico de movimentações unificado 
-Route::get('/estoque/historico-unificado', [EstoqueController::class, 'historicoUnificado'])->name('estoque.historico_unificado');
+
 
 // Rotas para Entradas de Estoque
 Route::get('/entradas-estoque', [EntradaEstoqueController::class, 'index'])->name('entradas-estoque.index');
@@ -64,3 +67,17 @@ Route::delete('/entradas-estoque/{entradas_estoque}', [App\Http\Controllers\Entr
 Route::resource('saidas-estoque', SaidaEstoqueController::class)->except([
     'edit', 'update'
 ]);
+
+// Rotas de Recurso para Vendas de Acessórios
+Route::get('/vendas-acessorios/item-template', function (Request $request) {
+    $index = $request->query('index'); // Pega o índice do request
+    $itemData = $request->query('itemData'); // Pega dados para pré-popular (se vier)
+    $itensEstoque = App\Models\Estoque::orderBy('nome')->get(); // Busca itens de estoque
+
+    // Retorna a view parcial renderizada
+    return view('vendas_acessorios._item_venda_template', compact('index', 'itemData', 'itensEstoque'))->render();
+})->name('vendas-acessorios.item_template');
+
+
+// ... rotas de recurso para vendas-acessorios ...
+Route::resource('vendas-acessorios', App\Http\Controllers\VendaAcessorioController::class);
