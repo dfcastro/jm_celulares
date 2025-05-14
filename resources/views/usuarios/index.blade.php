@@ -12,7 +12,6 @@
             </a>
         </div>
 
-        
         @if(session('error'))
              <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 {{ session('error') }}
@@ -49,12 +48,14 @@
                                     <span class="badge bg-secondary">{{ ucfirst($usuario->tipo_usuario) }}</span>
                                 @endif
                             </td>
-                            <td>{{ $usuario->created_at->format('d/m/Y H:i') }}</td>
+                            {{-- CORREÇÃO APLICADA AQUI --}}
                             <td>
-                                {{-- O link para 'usuarios.show' pode não ser necessário se tudo estiver no edit --}}
-                                {{-- <a href="{{ route('usuarios.show', $usuario->id) }}" class="btn btn-info btn-sm" title="Detalhes"><i class="bi bi-eye"></i></a> --}}
+                                {{ $usuario->created_at ? $usuario->created_at->format('d/m/Y H:i') : 'Data não disponível' }}
+                            </td>
+                            <td>
+                                {{-- ... botões de ação ... --}}
                                 <a href="{{ route('usuarios.edit', $usuario->id) }}" class="btn btn-warning btn-sm" title="Editar"><i class="bi bi-pencil"></i></a>
-                                @if(Auth::user()->id !== $usuario->id) {{-- Não permitir excluir a si mesmo --}}
+                                @if(Auth::user()->id !== $usuario->id)
                                     <form action="{{ route('usuarios.destroy', $usuario->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este usuário?');">
                                         @csrf
                                         @method('DELETE')
