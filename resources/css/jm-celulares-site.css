@@ -1,0 +1,245 @@
+/* resources/css/site-publico.css */
+
+/* Definição de Variáveis de Cor Globais para o Site Público */
+:root {
+    --jm-laranja: #FFA500;
+    /* Tom de laranja/amarelo do cartão - Ajuste se necessário */
+    --jm-cinza-escuro: #3A3A3A;
+    /* Tom de cinza do fundo do cartão - Ajuste se necessário */
+    --jm-texto-claro: #f8f9fa;
+    /* Um branco levemente acinzentado para textos sobre fundos escuros */
+    --jm-texto-escuro: #212529;
+    /* Cor de texto padrão do Bootstrap para fundos claros */
+}
+
+/* Estilos Gerais do Body que já estão no layout, mas podem ser reforçados aqui */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    font-family: 'Roboto', sans-serif;
+    /* Fonte padrão do site */
+    padding-top: 56px;
+    /* Ajuste se a altura da navbar mudar */
+    background-color: #f4f6f9;
+    /* Um cinza bem claro para o fundo geral da página, se desejado */
+    color: var(--jm-texto-escuro);
+}
+
+.main-content {
+    flex: 1;
+}
+
+.footer-site {
+    background-color: var(--jm-cinza-escuro);
+    color: var(--jm-texto-claro);
+    padding: 2rem 0;
+    font-size: 0.9em;
+}
+
+.footer-site a {
+    color: var(--jm-texto-claro);
+}
+
+.footer-site a:hover {
+    color: var(--jm-laranja);
+}
+
+.navbar-brand img {
+    max-height: 40px;
+    margin-right: 10px;
+}
+
+.navbar.fixed-top {
+    /* Garante que o fundo da navbar não seja transparente sobreposto */
+    background-color: #212529 !important;
+    /* bg-dark do Bootstrap */
+}
+
+
+/* Estilos para Seções Específicas */
+
+.hero-section {
+    background-color: var(--jm-cinza-escuro);
+    /* Se for usar imagem de fundo:
+    background-image: url('/path/to/your/banner-image.jpg');
+    background-size: cover;
+    background-position: center;
+    */
+    color: var(--jm-texto-claro);
+    padding: 5rem 1rem;
+    text-align: center;
+}
+
+.hero-section h1 {
+    color: var(--jm-laranja);
+    font-weight: bold;
+    font-size: clamp(2.5rem, 5vw, 3.8rem);
+    /* Tamanho de fonte responsivo */
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+    margin-bottom: 0.75rem;
+}
+
+.hero-section .lead {
+    font-size: clamp(1.1rem, 2.5vw, 1.3rem);
+    margin-bottom: 1.5rem;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.hero-section p:not(.lead) {
+    /* Para o "MANUTENÇÃO EM SMARTPHONE..." */
+    font-size: clamp(1rem, 2vw, 1.15rem);
+    margin-bottom: 2.5rem;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.hero-section .btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 1.1rem;
+}
+
+/* Estilo para todas as seções com padding padrão */
+.section-padding {
+    padding: 4rem 0;
+    /* Padding vertical. O container interno cuidará do horizontal */
+}
+
+.section-padding.bg-light {
+    /* Para seções com fundo claro */
+    background-color: #ffffff;
+    /* Branco para seções claras, contrastando com o body */
+}
+
+
+.section-title {
+    margin-bottom: 3rem;
+    font-weight: 700;
+    /* Mais peso para o título da seção */
+    font-size: 2.25rem;
+    /* Tamanho um pouco maior */
+    color: var(--jm-cinza-escuro);
+    position: relative;
+    padding-bottom: 0.5rem;
+}
+
+/* Opcional: adicionar uma pequena linha abaixo do título da seção */
+.section-title::after {
+    content: '';
+    display: block;
+    width: 60px;
+    height: 3px;
+    background-color: var(--jm-laranja);
+    margin: 0.5rem auto 0;
+}
+
+
+.service-card {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: #fff;
+    /* Fundo branco para os cards de serviço */
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    /* Sombra sutil */
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.service-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.service-card .icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--jm-laranja);
+}
+
+.service-card h4 {
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin-bottom: 0.75rem;
+    color: var(--jm-cinza-escuro);
+}
+
+.service-card p {
+    font-size: 0.95rem;
+    color: #555;
+}
+
+#brands {
+    background-color: #f8f9fa;
+    /* Um cinza um pouco diferente para a seção de marcas */
+}
+
+#brands img {
+    max-height: 45px;
+    margin: 10px 15px;
+    filter: grayscale(80%);
+    transition: filter 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+#brands img:hover {
+    filter: grayscale(0%);
+    transform: scale(1.1);
+}
+
+.contact-info h4 {
+    color: var(--jm-laranja);
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.contact-info p {
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    color: #444;
+}
+
+.contact-info p i {
+    width: 20px;
+    /* Alinha os ícones */
+}
+
+.contact-info a {
+    color: var(--jm-cinza-escuro);
+    text-decoration: none;
+}
+
+.contact-info a:hover {
+    color: var(--jm-laranja);
+    text-decoration: underline;
+}
+
+.map-responsive {
+    overflow: hidden;
+    padding-bottom: 56.25%;
+    /* Proporção 16:9 */
+    position: relative;
+    height: 0;
+    border-radius: 0.375rem;
+    /* Bootstrap's .rounded */
+}
+
+.map-responsive iframe {
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    border: 0;
+}
+
+/* Estilos para a página de consulta de status (consulta_status/index.blade.php e resultado.blade.php) */
+.card-header-consulta {
+    background-color: var(--jm-laranja) !important;
+    /* Força a cor laranja */
+    color: white !important;
+}
+
+.status-badge {
+    /* Classe genérica para badges de status, se precisar de mais controle */
+    font-size: 1.1rem;
+    padding: 0.5em 0.75em;
+}
