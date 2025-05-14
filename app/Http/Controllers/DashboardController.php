@@ -2,37 +2,69 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Estoque; // Para buscar itens de estoque
-use App\Models\Atendimento; // Para futuras estatísticas do dashboard
+use App\Models\Estoque;
+use App\Models\Atendimento;
+use App\Models\VendaAcessorio; // Adicionar
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth; // Para informações do usuário logad
+use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon; // Adicionar
+use Illuminate\Support\Facades\DB; // Adicionar
 
 
 class DashboardController extends Controller
 {
     public function index()
     {
+        $usuarioLogado = Auth::user();
+        $dataAtual = Carbon::now();
+
+        // Widget de Estoque Baixo (como já existe)
         $contagemItensEstoqueBaixo = Estoque::whereColumn('quantidade', '<=', 'estoque_minimo')
             ->where('estoque_minimo', '>', 0)
-            ->count(); // Apenas conta os itens
-
-        // Passar a contagem para todas as views que usam o layout principal
-        // A melhor forma de fazer isso é com um View Composer ou compartilhando globalmente
-        // Por agora, para simplificar, vamos focar em como usar no dashboard,
-        // mas o ideal é que essa contagem esteja disponível no _navigation.blade.php.
-
-        // Para o dashboard, ainda podemos passar a lista se quisermos um link direto
+            ->count();
         $itensEstoqueBaixo = Estoque::whereColumn('quantidade', '<=', 'estoque_minimo')
             ->where('estoque_minimo', '>', 0)
             ->orderBy('nome')
+            ->take(5) // Limitar para o widget
             ->get();
 
-        $atendimentosAbertosCount = Atendimento::whereNotIn('status', ['Entregue', 'Cancelado', 'Reprovado'])->count(); // Ajuste os status conforme necessário
-        
+        // Novos Widgets de Contadores
+        $atendimentosHoje = Atendimento::whereDate('data_entrada', $dataAtual->toDateString())->count();
+
+        $atendimentosPendentes = Atendimento::whereNotIn('status', ['Entregue', 'Cancelado', 'Reprovado'])
+            ->count(); // Ajuste os status finais/cancelados conforme sua lógica
+
+        $vendasHojeValor = VendaAcessorio::whereDate('data_venda', $dataAtual->toDateString())
+            ->sum('valor_total');
+
+        // Dados para o Gráfico de Atendimentos por Status (últimos 30 dias)
+        $dataInicioMes = $dataAtual->copy()->subDays(30)->startOfDay();
+        $dataFimMes = $dataAtual->copy()->endOfDay();
+
+        $atendimentosPorStatus = Atendimento::select('status', DB::raw('count(*) as total'))
+            ->whereBetween('created_at', [$dataInicioMes, $dataFimMes]) // Ou data_entrada, dependendo do que faz mais sentido
+            ->groupBy('status')
+            ->pluck('total', 'status') // Gera um array associativo: ['Status' => total, ...]
+            ->all(); // Converte para array PHP simples
+
+        // Lista de todos os status possíveis para garantir que todos apareçam no gráfico
+        $todosOsStatus = ['Em diagnóstico', 'Aguardando peça', 'Em manutenção', 'Pronto para entrega', 'Entregue', 'Cancelado', 'Reprovado']; // Adicione todos os seus status
+        $labelsGraficoStatus = [];
+        $dadosGraficoStatus = [];
+
+        foreach ($todosOsStatus as $status) {
+            $labelsGraficoStatus[] = $status;
+            $dadosGraficoStatus[] = $atendimentosPorStatus[$status] ?? 0; // Se o status não tiver contagem, usa 0
+        }
+
         return view('dashboard', compact(
             'itensEstoqueBaixo',
             'contagemItensEstoqueBaixo',
-            'atendimentosAbertosCount' // Passe para a view
+            'atendimentosHoje',
+            'atendimentosPendentes',
+            'vendasHojeValor',
+            'labelsGraficoStatus', // Para Chart.js
+            'dadosGraficoStatus'   // Para Chart.js
         ));
     }
 }

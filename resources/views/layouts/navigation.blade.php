@@ -20,7 +20,7 @@
                     @if(in_array(Auth::user()->tipo_usuario, ['admin', 'tecnico', 'atendente']))
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle {{ request()->routeIs('atendimentos.*') ? 'active' : '' }}" href="{{ route('atendimentos.index') }}" id="navbarDropdownAtendimentos" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Serviços
+                            Atendimentos
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="navbarDropdownAtendimentos">
                             <li><a class="dropdown-item" href="{{ route('atendimentos.index') }}">Listar Atendimentos</a></li>

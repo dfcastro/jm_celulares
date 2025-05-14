@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 class Cliente extends Model
 {
@@ -35,5 +36,12 @@ class Cliente extends Model
     public function atendimentos(): HasMany
     {
         return $this->hasMany(Atendimento::class);
+    }
+    public function setNomeCompletoAttribute($value) // O nome do método DEVE ser setNomeCompletoAttribute
+    {
+        // mb_convert_case com MB_CASE_TITLE funciona bem para nomes próprios,
+        // mas pode ter problemas com preposições "da", "de", "dos".
+        // Str::title é geralmente melhor para nomes próprios.
+        $this->attributes['nome_completo'] = Str::title(mb_strtolower($value, 'UTF-8'));
     }
 }

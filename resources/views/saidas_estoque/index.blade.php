@@ -7,14 +7,7 @@
     <div class="container mt-0">
         <h1>Saídas de Estoque</h1>
 
-        @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                {{ session('success') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        @endif
-
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+               <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <a href="{{ route('saidas-estoque.create') }}" class="btn btn-primary">
                 <i class="bi bi-dash-circle"></i> Nova Saída
             </a>

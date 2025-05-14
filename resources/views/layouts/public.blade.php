@@ -80,7 +80,7 @@
                     <i class="bi bi-telephone"></i> (38) 99269-6404
                 </a>
             </p>
-            <p class="mb-0"><small>Desenvolvido com <i class="bi bi-heart-fill text-danger"></i> por FrankDev Soluções</small></p>
+            <p class="mb-0"><small>Desenvolvido por FrankDev Soluções <i class="bi bi-cpu text-success"></i> </small></p>
         </div>
     </footer>
 

@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+@media (max-width: 575.98px) { /* Breakpoint 'sm' do Bootstrap */
+    .form-label {
+        margin-bottom: 0.25rem; /* Reduz um pouco a margem do label */
+    }
+    .form-control, .form-select {
+        /* Pode ajustar o padding ou font-size se necessário, mas geralmente o Bootstrap já lida bem */
+    }
+    .container .card .card-body { /* Se os cards estiverem muito apertados */
+        padding: 1rem;
+    }
+}

@@ -40,7 +40,7 @@ class SaidaEstoqueController extends Controller
 
         // Filtro por Atendimento Específico (ID do atendimento)
         if ($request->filled('filtro_atendimento_id')) {
-            if($request->input('filtro_atendimento_id') == '0'){ // Para "Não Vinculado"
+            if ($request->input('filtro_atendimento_id') == '0') { // Para "Não Vinculado"
                 $query->whereNull('atendimento_id');
             } else {
                 $query->where('atendimento_id', $request->input('filtro_atendimento_id'));
@@ -48,7 +48,7 @@ class SaidaEstoqueController extends Controller
         }
 
         // Filtro por Observações da Saída
-         if ($request->filled('busca_obs_saida')) {
+        if ($request->filled('busca_obs_saida')) {
             $searchTerm = $request->input('busca_obs_saida');
             $query->where('observacoes', 'like', '%' . $searchTerm . '%');
         }
@@ -75,17 +75,17 @@ class SaidaEstoqueController extends Controller
             // Se a saída puder ser iniciada a partir de um atendimento por um atendente,
             // essa lógica precisa ser mais flexível ou o Gate aqui deve ser diferente.
             // Por "Saídas Avulsas" entende-se saídas não diretamente ligadas a um fluxo de venda ou atendimento iniciado por atendente.
-           return redirect()->route('estoque.index')->with('error', 'Acesso não autorizado.');
-       }
-    
+            return redirect()->route('estoque.index')->with('error', 'Acesso não autorizado.');
+        }
+
         $selectedEstoqueId = $request->input('estoque_id');
         $selectedAtendimentoId = $request->input('atendimento_id');
-    
+
         $atendimentoSelecionado = null;
         if ($selectedAtendimentoId) {
             $atendimentoSelecionado = Atendimento::with('cliente')->find($selectedAtendimentoId);
         }
-    
+
         return view('saidas_estoque.create', compact(
             // 'atendimentos', // Não mais necessário
             'selectedEstoqueId',
@@ -98,58 +98,44 @@ class SaidaEstoqueController extends Controller
      */
     public function store(Request $request)
     {
-        if (Gate::denies('is-admin-or-tecnico')) {
-            return redirect()->route('saidas-estoque.index')->with('error', 'Acesso não autorizado para registrar saídas.');
+        if (Gate::denies('is-admin-or-tecnico')) { // Ou a permissão apropriada
+            return redirect()->route('saidas-estoque.index')->with('error', 'Acesso não autorizado.');
         }
-        // 0. Validação inicial dos campos do formulário
+
         $request->validate([
             'estoque_id' => 'required|exists:estoque,id',
-            'atendimento_id' => 'nullable|exists:atendimentos,id',
+            'atendimento_id' => 'nullable|exists:atendimentos,id', // Mantém nullable
             'quantidade' => 'required|integer|min:1',
-            'data_saida' => 'required|date', // Apenas validação de data, sem hora
+            'data_saida' => 'required|date',
             'observacoes' => 'nullable|string|max:255',
         ]);
 
-        // 1. Buscar a peça de estoque selecionada
         $estoque = Estoque::find($request->estoque_id);
-
-        if (!$estoque) {
+        if (!$estoque || $request->quantidade > $estoque->quantidade) {
             throw ValidationException::withMessages([
-                'estoque_id' => 'A peça selecionada não foi encontrada.',
+                'quantidade' => 'Quantidade solicitada excede o estoque disponível ou peça inválida.',
             ]);
         }
 
-        // 2. Comparar a quantidade solicitada com a quantidade em estoque
-        $quantidadeEmEstoque = (int) $estoque->quantidade;
-        $quantidadeSolicitada = (int) $request->quantidade;
-
-        if ($quantidadeSolicitada > $quantidadeEmEstoque) {
-            throw ValidationException::withMessages([
-                'quantidade' => 'A quantidade solicitada (' . $quantidadeSolicitada . ') excede a quantidade disponível em estoque (' . $quantidadeEmEstoque . ').',
-            ]);
+        $dadosSaida = $request->all();
+        if ($request->filled('data_saida')) {
+            $dataDoFormulario = $request->input('data_saida');
+            $dadosSaida['data_saida'] = Carbon::parse($dataDoFormulario)->setTimeFrom(Carbon::now());
         }
 
-        // --- MODIFICADO: Combinar a data selecionada com a hora atual ---
-        // Pega a data do formulário (ex: "2025-05-10")
-        $dataSaidaFormulario = $request->input('data_saida');
+        SaidaEstoque::create($dadosSaida);
+        $estoque->decrement('quantidade', $request->quantidade);
 
-        // Cria um objeto Carbon a partir da data do formulário e define a hora para a hora atual
-        $dataCompleta = Carbon::parse($dataSaidaFormulario)
-            ->setTime(Carbon::now()->hour, Carbon::now()->minute, Carbon::now()->second);
-
-        // Pega todos os outros dados da requisição
-        $dadosSaida = $request->except('data_saida'); // Remove data_saida da requisição original
-
-        // Adiciona a data_saida completa ao array de dados
-        $dadosSaida['data_saida'] = $dataCompleta;
-
-        // 3. Criar a saída de estoque com a data e hora ajustadas
-        SaidaEstoque::create($dadosSaida); // Usa o array $dadosSaida com a data e hora completas
-
-        // Decrementar a quantidade no estoque principal
-        $estoque->decrement('quantidade', $quantidadeSolicitada);
-
-        return redirect()->route('saidas-estoque.index')->with('success', 'Saída de estoque registrada com sucesso!');
+        // NOVO: Lógica de Redirecionamento Condicional
+        if ($request->filled('atendimento_id')) {
+            // Se a saída foi vinculada a um atendimento, volta para a tela desse atendimento
+            return redirect()->route('atendimentos.show', $request->atendimento_id)
+                ->with('success', 'Peça adicionada ao atendimento e saída de estoque registrada!');
+        } else {
+            // Caso contrário (saída avulsa), volta para a lista de saídas
+            return redirect()->route('saidas-estoque.index')
+                ->with('success', 'Saída de estoque avulsa registrada com sucesso!');
+        }
     }
 
     /**
@@ -185,5 +171,4 @@ class SaidaEstoqueController extends Controller
 
         return redirect()->route('saidas-estoque.index')->with('success', 'Saída de estoque excluída com sucesso!');
     }
-    
 }

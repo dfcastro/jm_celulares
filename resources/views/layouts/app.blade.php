@@ -11,6 +11,7 @@
 
     {{-- Bootstrap CSS (CDN) --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
     {{-- jQuery UI CSS (para autocompletes) --}}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.min.css" />
@@ -98,9 +99,16 @@
 
     <footer class="footer text-center">
         <div class="container">
-            <span>&copy; {{ date('Y') }} {{ config('app.name', 'JM Celulares') }}. Todos os direitos reservados.</span>
-            <span>Desenvolvido por FrankDev Soluções</span>
-
+            <p class="mb-1">© {{ date('Y') }} JM Celulares. Todos os direitos reservados.</p>
+            <p class="mb-1">
+                <a href="https://instagram.com/Jmcelulares.mg" target="_blank" class="text-white text-decoration-none me-2">
+                    <i class="bi bi-instagram"></i> @Jmcelulares.mg
+                </a> |
+                <a href="tel:+5538992696404" class="text-white text-decoration-none ms-2">
+                    <i class="bi bi-telephone"></i> (38) 99269-6404
+                </a>
+            </p>
+            <p class="mb-0"><small>Desenvolvido por FrankDev Soluções <i class="bi bi-cpu text-success"></i> </small></p>
         </div>
     </footer>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>

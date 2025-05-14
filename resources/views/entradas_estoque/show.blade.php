@@ -24,7 +24,7 @@
 
                 <a href="{{ route('entradas-estoque.index') }}" class="btn btn-primary">Voltar para Entradas</a>
 
-                <form action="{{ route('entradas-estoque.destroy', $entrada->id) }}" method="POST" class="d-inline">
+                <form action="{{ route('entradas-estoque.destroy', $entradaEstoque->id) }}" method="POST" class="d-inline">
                     @csrf {{-- Importante: Token CSRF --}}
                     @method('DELETE') {{-- Importante: Simula o método DELETE --}}
                     <button type="submit" class="btn btn-danger btn-sm"

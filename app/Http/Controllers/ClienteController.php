@@ -8,6 +8,7 @@ use Illuminate\Validation\Rule; // Certifique-se de que Rule está importado
 use Illuminate\Support\Facades\Validator; // NOVO: Importar o Facade Validator
 use Illuminate\Support\Facades\Gate;
 
+
 class ClienteController extends Controller
 {
     /**
@@ -57,7 +58,7 @@ class ClienteController extends Controller
 
         // 2. Definir regras de validação
         $rules = [
-            'nome_completo' => 'required|string|max:255',
+            'nome_completo' => 'required|string|max:255|',
             'cpf_cnpj' => ['required', 'string', 'max:20', Rule::unique('clientes', 'cpf_cnpj')],
             'telefone' => 'nullable|string|max:15', // Ajustado para permitir mais caracteres após remover máscara
             'email' => 'nullable|email|max:255|unique:clientes,email',

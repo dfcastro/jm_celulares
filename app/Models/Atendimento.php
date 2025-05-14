@@ -48,4 +48,8 @@ class Atendimento extends Model
     {
         return $this->hasMany(SaidaEstoque::class);
     }
+    public static function getPossibleStatuses(): array
+    {
+        return ['Em diagnóstico', 'Aguardando peça', 'Em manutenção', 'Pronto para entrega', 'Entregue', 'Cancelado', 'Reprovado'];
+    }
 }

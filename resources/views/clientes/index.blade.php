@@ -6,12 +6,7 @@
     <div class="container mt-0"> {{-- Removi mt-5 pois o layout já tem padding --}}
         <h1>Lista de Clientes</h1>
 
-        @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                {{ session('success') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        @endif
+       
 
         <div class="d-flex justify-content-between align-items-center mb-3">
             <a href="{{ route('clientes.create') }}" class="btn btn-primary">Novo Cliente</a>
@@ -40,7 +35,7 @@
                     @forelse ($clientes as $cliente)
                         <tr>
                             <td>{{ $cliente->id }}</td>
-                            <td>{{ $cliente->nome_completo }}</td>
+                            <td>{{ucfirst( $cliente->nome_completo) }}</td>
                             <td>{{ $cliente->cpf_cnpj }}</td>
                             <td>{{ $cliente->telefone ?? 'Não informado' }}</td>
                             <td>

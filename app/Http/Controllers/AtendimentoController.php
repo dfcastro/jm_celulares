@@ -10,9 +10,10 @@ use Illuminate\Support\Str;
 use Carbon\Carbon;     // Para manipulação de datas
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Gate;
-use Auth;
+use Illuminate\Support\Facades\Auth;
 use App\Notifications\AtendimentoProntoNotification;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\Rule;
 
 class AtendimentoController extends Controller
 {
@@ -110,7 +111,7 @@ class AtendimentoController extends Controller
     {
         $request->validate([
             'cliente_id' => 'required|exists:clientes,id',
-            'descricao_aparelho' => 'required|string|max:20',
+            'descricao_aparelho' => 'required|string|max:255', // Aumentei um pouco o maxlen
             'problema_relatado' => 'required|string',
             'data_entrada' => 'required|date',
             'tecnico_id' => 'nullable|exists:users,id',
@@ -118,7 +119,6 @@ class AtendimentoController extends Controller
 
         $atendimentoData = $request->except('data_entrada');
 
-        // Processar a data_entrada para incluir a hora atual (como já fizemos)
         if ($request->filled('data_entrada')) {
             $dataDoFormulario = $request->input('data_entrada');
             $atendimentoData['data_entrada'] = Carbon::parse($dataDoFormulario)->setTimeFrom(Carbon::now());
@@ -126,33 +126,25 @@ class AtendimentoController extends Controller
             $atendimentoData['data_entrada'] = Carbon::now();
         }
 
-        // --- NOVA LÓGICA PARA GERAR O CÓDIGO DE CONSULTA ---
-        $anoAtual = now()->year; // Pega o ano atual (ex: 2025)
+        $anoAtual = now()->year;
         $codigoUnico = false;
         $novoCodigoConsulta = '';
-
-        // Loop para garantir unicidade (embora colisões sejam raras com 5 dígitos + ano)
         while (!$codigoUnico) {
-            $parteNumerica = random_int(10000, 99999); // Gera um número aleatório de 5 dígitos
-            // Você pode querer mais ou menos dígitos. Ex: random_int(1000, 9999) para 4 dígitos.
-            // Ou usar Str::random(5) se preferir alfanumérico, mas números são mais fáceis de ditar.
-            // Se usar Str::upper(Str::random(5)) para alfanumérico:
-            // $parteNumerica = Str::upper(Str::random(5));
-
+            $parteNumerica = random_int(10000, 99999);
             $novoCodigoConsulta = $parteNumerica . '-' . $anoAtual;
-
-            // Verifica se o código já existe no banco
             $existe = Atendimento::where('codigo_consulta', $novoCodigoConsulta)->exists();
             if (!$existe) {
                 $codigoUnico = true;
             }
         }
         $atendimentoData['codigo_consulta'] = $novoCodigoConsulta;
-        // --- FIM DA NOVA LÓGICA ---
 
-        Atendimento::create($atendimentoData);
+        // CRIA o atendimento e guarda a instância
+        $atendimento = Atendimento::create($atendimentoData); // <<<< MUDANÇA AQUI
 
-        return redirect()->route('atendimentos.index')->with('success', 'Atendimento registrado com sucesso! Código de consulta: ' . $novoCodigoConsulta);
+        // Em vez de redirecionar para o index, redireciona para o show do atendimento criado
+        return redirect()->route('atendimentos.show', $atendimento->id) // <<<< MUDANÇA AQUI
+            ->with('success', 'Atendimento registrado com sucesso! Código de consulta: ' . $novoCodigoConsulta);
     }
     /**
      * Display the specified resource.
@@ -276,7 +268,7 @@ class AtendimentoController extends Controller
         // Se todas as verificações de permissão passaram (para laudo, valor, status):
         $dadosParaUpdate = [
             'cliente_id' => $validatedData['cliente_id'],
-            'celular' => $validatedData['celular'],
+            'descricao_aparelho' => $validatedData['descricao_aparelho'],
             'problema_relatado' => $validatedData['problema_relatado'],
             'status' => $validatedData['status'],
             'tecnico_id' => $validatedData['tecnico_id'] ?? null, // Garante null se não presente
@@ -410,5 +402,56 @@ class AtendimentoController extends Controller
 
         // Opção 2: Mostrar o PDF no navegador (inline)
         // return $pdf->stream($nomeArquivo);
+    }
+    // Em app/Http/Controllers/AtendimentoController.php
+    public function atualizarStatus(Request $request, Atendimento $atendimento)
+    {
+        $request->validate([
+            'status' => ['required', 'string', Rule::in(['Em diagnóstico', 'Aguardando peça', 'Em manutenção', 'Pronto para entrega', 'Entregue', 'Cancelado', 'Reprovado'])], // Use seus status reais
+        ]);
+
+        $statusAntigo = $atendimento->status;
+        $novoStatus = $request->input('status');
+
+        // Lógica de permissão para mudança de status (pode refatorar para um Service ou Trait se ficar complexa)
+        $permitidoMudarStatus = false;
+        $usuarioAtual = Auth::user();
+
+        if ($usuarioAtual->tipo_usuario == 'admin') {
+            $permitidoMudarStatus = true;
+        } elseif ($usuarioAtual->tipo_usuario == 'tecnico') {
+            if (!in_array($novoStatus, ['Entregue'])) { // Exemplo de restrição
+                $permitidoMudarStatus = true;
+            }
+        } elseif ($usuarioAtual->tipo_usuario == 'atendente') {
+            if (in_array($novoStatus, ['Em diagnóstico', 'Aguardando peça', 'Pronto para entrega', 'Entregue'])) {
+                $permitidoMudarStatus = true;
+            }
+            if ($statusAntigo == 'Pronto para entrega' && $novoStatus == 'Entregue') {
+                $permitidoMudarStatus = true;
+            }
+        }
+
+        if (!$permitidoMudarStatus) {
+            return redirect()->route('atendimentos.show', $atendimento->id)
+                ->with('error', 'Você não tem permissão para alterar o atendimento para o status: ' . $novoStatus);
+        }
+
+        $atendimento->status = $novoStatus;
+        $atendimento->save();
+
+        // Lógica de notificação (como no método update)
+        if ($atendimento->status == 'Pronto para entrega' && $statusAntigo != 'Pronto para entrega') {
+            try {
+                if ($atendimento->cliente && $atendimento->cliente->email) {
+                    $atendimento->cliente->notify(new AtendimentoProntoNotification($atendimento));
+                }
+            } catch (\Exception $e) {
+                Log::error("Erro ao enviar notificação 'Atendimento Pronto' (atualizarStatus) para atendimento ID: {$atendimento->id} - Erro: " . $e->getMessage());
+            }
+        }
+
+        return redirect()->route('atendimentos.show', $atendimento->id)
+            ->with('success', 'Status do atendimento atualizado com sucesso!');
     }
 }

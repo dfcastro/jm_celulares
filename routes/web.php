@@ -75,6 +75,8 @@ Route::middleware(['auth'])->group(function () {
     // Atendimentos
     Route::get('/atendimentos/{atendimento}/gerar-pdf', [AtendimentoController::class, 'gerarPdf'])->name('atendimentos.pdf');
     Route::resource('atendimentos', AtendimentoController::class);
+    Route::patch('/atendimentos/{atendimento}/atualizar-status', [AtendimentoController::class, 'atualizarStatus'])
+    ->name('atendimentos.atualizarStatus');
     // A rota de autocomplete de atendimentos está pública acima.
 
     // Estoque

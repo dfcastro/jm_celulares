@@ -38,7 +38,7 @@ th { background-color: #f9f9f9; font-weight: bold; }
 
         <div class="section">
             <h2>Dados do Cliente</h2>
-            <p><span class="label">Cliente:</span> {{ $atendimento->cliente->nome_completo ?? 'N/A' }}</p>
+            <p><span class="label">Cliente:</span> {{ ucfirst($atendimento->cliente->nome_completo) ?? 'N/A' }}</p>
             <p><span class="label">CPF/CNPJ:</span> {{ $atendimento->cliente->cpf_cnpj ?? 'N/A' }}</p>
             <p><span class="label">Telefone/Contato:</span> {{ $atendimento->cliente->telefone ?? $atendimento->celular ?? 'N/A' }}</p>
             <p><span class="label">Email:</span> {{ $atendimento->cliente->email ?? 'N/A' }}</p>

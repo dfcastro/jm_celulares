@@ -124,7 +124,7 @@
                             <td>{{ $atendimento->id }}</td>
                             <td>
                                 @if($atendimento->cliente)
-                                <a href="{{ route('clientes.show', $atendimento->cliente->id) }}">{{ $atendimento->cliente->nome_completo }}</a>
+                                <a href="{{ route('clientes.show', $atendimento->cliente->id) }}">{{ ucfirst($atendimento->cliente->nome_completo) }}</a>
                                 <small class="d-block text-muted">{{ $atendimento->cliente->cpf_cnpj }}</small>
                                 @else
                                 <span class="text-muted fst-italic">Cliente não informado</span>
