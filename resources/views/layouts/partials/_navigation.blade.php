@@ -61,7 +61,7 @@
                         <li>
                             <hr class="dropdown-divider">
                         </li>
-                        <li><a class="dropdown-item" href="{{ route('entradas-estoque.index') }}">Entradas no Estoque</a></li>
+                        <li><a class="dropdown-item" href="{{ route('entradas-estoque.index') }}">Histórico de Entradas no Estoque</a></li>
                         <li><a class="dropdown-item" href="{{ route('entradas-estoque.create') }}">Nova Entrada</a></li>
                         @endif
 
@@ -69,7 +69,7 @@
                         <li>
                             <hr class="dropdown-divider">
                         </li>
-                        <li><a class="dropdown-item" href="{{ route('saidas-estoque.index') }}">Saídas do Estoque (Avulsas)</a></li>
+                        <li><a class="dropdown-item" href="{{ route('saidas-estoque.index') }}">Histórico de Saídas do Estoque (Avulsas)</a></li>
                         <li><a class="dropdown-item" href="{{ route('saidas-estoque.create') }}">Nova Saída Avulsa</a></li>
                         <li>
                             <hr class="dropdown-divider">
@@ -95,10 +95,10 @@
                 @if(in_array(Auth::user()->tipo_usuario, ['admin', 'tecnico', 'atendente']))
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {{ request()->routeIs('clientes.*') ? 'active' : '' }}" href="{{ route('clientes.index') }}" id="navbarDropdownClientes" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Cadastros
+                        Clientes
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownClientes">
-                        <li><a class="dropdown-item" href="{{ route('clientes.index') }}">Clientes</a></li>
+                        <li><a class="dropdown-item" href="{{ route('clientes.index') }}">Lista de Clientes</a></li>
                         <li><a class="dropdown-item" href="{{ route('clientes.create') }}">Novo Cliente</a></li>
                     </ul>
                 </li>
@@ -106,7 +106,7 @@
 
                 {{-- CONSULTA CLIENTE --}}
                 <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('consulta.index') ? 'active' : '' }}" href="{{ route('consulta.index') }}">Consulta Cliente</a>
+                    <a class="nav-link {{ request()->routeIs('consulta.index') ? 'active' : '' }}" href="{{ route('consulta.index') }}">Consulta Atendimento</a>
                 </li>
 
                 {{-- RELATÓRIOS --}}

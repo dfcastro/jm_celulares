@@ -316,32 +316,49 @@
         }
 
 
-        // ViaCEP para o modal (já deve estar aqui de alguma forma)
-        $('#modal_cep').on('blur', function() {
-            var cep = $(this).val().replace(/\D/g, '');
-            if (cep.length === 8) {
-                // Mostra campos de endereço se estiverem ocultos
-                $(this).closest('form').find('#endereco_modal_fields').slideDown();
-                $.getJSON("https://viacep.com.br/ws/" + cep + "/json/?callback=?", function(dados) {
-                    if (!("erro" in dados)) {
-                        $('#modal_logradouro').val(dados.logradouro);
-                        // Você precisaria adicionar inputs para bairro, cidade, estado no modal
-                        // e preenchê-los aqui:
-                        // $('#modal_bairro').val(dados.bairro);
-                        // $('#modal_cidade').val(dados.localidade);
-                        // $('#modal_estado').val(dados.uf);
-                        $('#modal_numero').focus();
-                    } else {
-                        // alert("CEP não encontrado no modal.");
-                        // Limpar campos se o CEP for inválido
-                        $('#modal_logradouro').val('');
-                        // ...limpar outros campos de endereço...
-                    }
-                });
+        $('#modal_cep').on('blur', function() { // Seletor para o CEP do modal
+    var cep = $(this).val().replace(/\D/g, '');
+    var formDoModal = $(this).closest('form'); // Para encontrar campos dentro do formulário do modal
+
+    if (cep.length === 8) {
+        console.log("Consultando CEP (MODAL):", cep);
+        formDoModal.find('#endereco_modal_fields').slideDown();
+
+        $.getJSON("https://viacep.com.br/ws/" + cep + "/json/?callback=?", function(dados) {
+            console.log("Dados recebidos da ViaCEP (MODAL):", dados);
+            if (!("erro" in dados)) {
+                formDoModal.find('#modal_logradouro').val(dados.logradouro);
+                formDoModal.find('#modal_bairro').val(dados.bairro);
+                
+                // CORREÇÃO/VERIFICAÇÃO PRINCIPAL AQUI:
+                formDoModal.find('#modal_cidade').val(dados.localidade); // Usar 'localidade'
+                formDoModal.find('#modal_estado').val(dados.uf);       // Usar 'uf'
+                
+                console.log("Cidade (MODAL) preenchida com:", dados.localidade);
+                console.log("Estado (MODAL) preenchido com:", dados.uf);
+                
+                formDoModal.find('#modal_numero').focus();
             } else {
-                $(this).closest('form').find('#endereco_modal_fields').slideUp(); // Esconde se o CEP não for válido
+                alert("CEP (Modal) não encontrado ou inválido.");
+                formDoModal.find('#modal_logradouro').val('');
+                formDoModal.find('#modal_bairro').val('');
+                formDoModal.find('#modal_cidade').val(''); // Limpar
+                formDoModal.find('#modal_estado').val(''); // Limpar
+                formDoModal.find('#modal_cep').focus();
             }
+        }).fail(function(jqxhr, textStatus, error) {
+            var err = textStatus + ", " + error;
+            console.error("Erro na requisição ViaCEP (MODAL): " + err);
+            alert("Erro ao consultar o serviço de CEP no modal. Verifique sua conexão ou tente mais tarde.");
         });
+    } else if (cep.length > 0 && cep.length < 8) {
+        // formDoModal.find('#endereco_modal_fields').slideUp(); // Opcional: esconder se CEP inválido
+        alert("CEP (Modal) inválido. Digite 8 dígitos.");
+    } else {
+        // Se o CEP for apagado, esconder os campos de endereço do modal
+        // formDoModal.find('#endereco_modal_fields').slideUp();
+    }
+});
 
         // Limpar formulário do modal quando ele é fechado
         $('#modalNovoCliente').on('hidden.bs.modal', function() {
