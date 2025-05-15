@@ -61,7 +61,7 @@ Route::middleware(['auth'])->group(function () {
     //      return view('dashboard');
     //  })->name('dashboard');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard'); // <<<< NOVA ROTA
-    
+
     // ROTAS EXCLUSIVAS PARA ADMINISTRADORES
     Route::middleware(['admin'])->group(function () {
         Route::resource('usuarios', UsuarioController::class);// GERENCIAMENTO DE USUÁRIOS
@@ -76,7 +76,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/atendimentos/{atendimento}/gerar-pdf', [AtendimentoController::class, 'gerarPdf'])->name('atendimentos.pdf');
     Route::resource('atendimentos', AtendimentoController::class);
     Route::patch('/atendimentos/{atendimento}/atualizar-status', [AtendimentoController::class, 'atualizarStatus'])
-    ->name('atendimentos.atualizarStatus');
+        ->name('atendimentos.atualizarStatus');
+    Route::patch('/atendimentos/{atendimento}/atualizar-campo/{campo}', [App\Http\Controllers\AtendimentoController::class, 'atualizarCampoAjax'])
+        ->name('atendimentos.atualizarCampoAjax');
+        // Dentro do grupo autenticado
+Route::patch('/atendimentos/{atendimento}/atualizar-valores-servico', [App\Http\Controllers\AtendimentoController::class, 'atualizarValoresServicoAjax'])
+->name('atendimentos.atualizarValoresServicoAjax');
     // A rota de autocomplete de atendimentos está pública acima.
 
     // Estoque

@@ -52,4 +52,32 @@ class Atendimento extends Model
     {
         return ['Em diagnóstico', 'Aguardando peça', 'Em manutenção', 'Pronto para entrega', 'Entregue', 'Cancelado', 'Reprovado'];
     }
+    // Em app/Models/Atendimento.php
+
+
+    public static function getStatusClass($status): string
+    {
+        return match ($status) {
+            'Em diagnóstico' => 'bg-info text-dark',
+            'Aguardando peça' => 'bg-warning text-dark',
+            'Em manutenção' => 'bg-primary text-white', // Adicionei text-white para melhor contraste
+            'Pronto para entrega' => 'bg-success text-white',
+            'Entregue' => 'bg-secondary text-white',
+            'Cancelado', 'Reprovado' => 'bg-danger text-white',
+            default => 'bg-light text-dark',
+        };
+    }
+
+    public static function getStatusIcon($status): string
+    {
+        return match ($status) {
+            'Em diagnóstico' => 'bi-search',
+            'Aguardando peça' => 'bi-hourglass-split',
+            'Em manutenção' => 'bi-gear-fill',
+            'Pronto para entrega' => 'bi-check-circle-fill',
+            'Entregue' => 'bi-box-arrow-in-right',
+            'Cancelado', 'Reprovado' => 'bi-x-octagon-fill',
+            default => 'bi-question-circle-fill',
+        };
+    }
 }
