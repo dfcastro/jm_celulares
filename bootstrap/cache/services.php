@@ -45,8 +45,9 @@
     41 => 'Carbon\\Laravel\\ServiceProvider',
     42 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     43 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    44 => 'App\\Providers\\AppServiceProvider',
-    45 => 'App\\Providers\\AuthServiceProvider',
+    44 => 'SimpleSoftwareIO\\QrCode\\QrCodeServiceProvider',
+    45 => 'App\\Providers\\AppServiceProvider',
+    46 => 'App\\Providers\\AuthServiceProvider',
   ),
   'eager' => 
   array (
@@ -78,8 +79,9 @@
     25 => 'Carbon\\Laravel\\ServiceProvider',
     26 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     27 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    28 => 'App\\Providers\\AppServiceProvider',
-    29 => 'App\\Providers\\AuthServiceProvider',
+    28 => 'SimpleSoftwareIO\\QrCode\\QrCodeServiceProvider',
+    29 => 'App\\Providers\\AppServiceProvider',
+    30 => 'App\\Providers\\AuthServiceProvider',
   ),
   'deferred' => 
   array (

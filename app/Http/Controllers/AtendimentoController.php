@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Auth; // Importar Auth
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use App\Notifications\AtendimentoProntoNotification;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 // Removido: use Illuminate\Support\Facades\Notification; // Não é necessário aqui se usar $atendimento->cliente->notify(...)
 
 class AtendimentoController extends Controller
@@ -312,6 +313,8 @@ class AtendimentoController extends Controller
     public function gerarPdf(Atendimento $atendimento)
     {
         $atendimento->load(['cliente', 'tecnico', 'saidasEstoque.estoque']);
+
+        // Cálculos de valores
         $valorTotalPecas = 0;
         if ($atendimento->saidasEstoque) {
             foreach ($atendimento->saidasEstoque as $saida) {
@@ -324,14 +327,29 @@ class AtendimentoController extends Controller
         $valorServicoLiquido = ($atendimento->valor_servico ?? 0) - ($atendimento->desconto_servico ?? 0);
         $valorTotalAtendimento = $valorServicoLiquido + $valorTotalPecas;
 
+        // URL para o link clicável
+        $urlConsulta = route('consulta.index');
+
         $dadosParaPdf = [
             'atendimento' => $atendimento,
             'valorTotalPecas' => $valorTotalPecas,
             'valorServicoLiquido' => $valorServicoLiquido,
             'valorTotalAtendimento' => $valorTotalAtendimento,
             'dataImpressao' => Carbon::now(),
+            'nomeEmpresa' => 'JM Celulares',
+            'enderecoEmpresa' => 'Alameda Capitão José Custódio, 130, Centro - Monte Azul - MG',
+            'telefoneEmpresa' => '(38) 99269-6404',
+            'emailEmpresa' => 'contato@jmcelulares.com.br', // Adicione o email da sua empresa
+            'urlConsultaSite' => $urlConsulta,
+            // Não precisamos mais de 'qrCodeBase64' se a imagem for estática
         ];
+
         $pdf = Pdf::loadView('atendimentos.pdf_template', $dadosParaPdf);
+        // Opção para habilitar carregamento de imagens remotas e CSS se necessário (cuidado com segurança)
+        // $pdf->setOption('isRemoteEnabled', true);
+        // $pdf->setOption('isHtml5ParserEnabled', true);
+
+
         $nomeArquivo = 'OS_Atendimento_' . $atendimento->id . '_' . Str::slug($atendimento->cliente->nome_completo ?? 'cliente', '_') . '.pdf';
         return $pdf->stream($nomeArquivo);
     }
