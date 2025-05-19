@@ -15,6 +15,7 @@ use App\Http\Controllers\VendaAcessorioController;
 use App\Http\Controllers\RelatorioController;
 use Illuminate\Http\Request; // Se usado em closures de rota
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\OrcamentoController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -26,7 +27,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
 });
 
 Route::model('saida_estoque', SaidaEstoque::class);
@@ -64,9 +64,31 @@ Route::middleware(['auth'])->group(function () {
 
     // ROTAS EXCLUSIVAS PARA ADMINISTRADORES
     Route::middleware(['admin'])->group(function () {
-        Route::resource('usuarios', UsuarioController::class);// GERENCIAMENTO DE USUÁRIOS
+        Route::resource('usuarios', UsuarioController::class); // GERENCIAMENTO DE USUÁRIOS
         // Ex: Route::get('/configuracoes-sistema', [ConfigController::class, 'index'])->name('config.index');
     });
+
+    Route::resource('orcamentos', OrcamentoController::class);
+
+    // Rotas para ações de status do orçamento
+    Route::post('/orcamentos/{orcamento}/marcar-aguardando', [OrcamentoController::class, 'marcarComoAguardando'])
+        ->name('orcamentos.marcarAguardando'); // Status: Em Elaboração -> Aguardando Aprovação
+
+    Route::post('/orcamentos/{orcamento}/aprovar', [OrcamentoController::class, 'aprovarOrcamento'])
+        ->name('orcamentos.aprovar'); // Status: Aguardando Aprovação -> Aprovado
+
+    Route::post('/orcamentos/{orcamento}/reprovar', [OrcamentoController::class, 'reprovarOrcamento'])
+        ->name('orcamentos.reprovar'); // Status: Aguardando Aprovação -> Reprovado
+
+    // Rota para gerar PDF do orçamento
+    Route::get('/orcamentos/{orcamento}/pdf', [OrcamentoController::class, 'gerarPdf'])
+        ->name('orcamentos.pdf');
+
+    Route::post('/orcamentos/{orcamento}/converter-os', [OrcamentoController::class, 'converterEmOs'])
+        ->name('orcamentos.converterEmOs');
+
+
+
 
     // Clientes
     Route::resource('clientes', ClienteController::class);
@@ -79,9 +101,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('atendimentos.atualizarStatus');
     Route::patch('/atendimentos/{atendimento}/atualizar-campo/{campo}', [App\Http\Controllers\AtendimentoController::class, 'atualizarCampoAjax'])
         ->name('atendimentos.atualizarCampoAjax');
-        // Dentro do grupo autenticado
-Route::patch('/atendimentos/{atendimento}/atualizar-valores-servico', [App\Http\Controllers\AtendimentoController::class, 'atualizarValoresServicoAjax'])
-->name('atendimentos.atualizarValoresServicoAjax');
+    // Dentro do grupo autenticado
+    Route::patch('/atendimentos/{atendimento}/atualizar-valores-servico', [App\Http\Controllers\AtendimentoController::class, 'atualizarValoresServicoAjax'])
+        ->name('atendimentos.atualizarValoresServicoAjax');
     // A rota de autocomplete de atendimentos está pública acima.
 
     // Estoque

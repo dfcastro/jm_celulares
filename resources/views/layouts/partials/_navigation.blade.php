@@ -14,6 +14,21 @@
                 <li class="nav-item">
                     <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" aria-current="page" href="{{ route('dashboard') }}">Painel</a>
                 </li>
+                {{-- ... ORÇAMENTOS ... --}}
+
+                @if(in_array(Auth::user()->tipo_usuario, ['admin', 'tecnico', 'atendente'])) {{-- Ou a permissão que você definir --}}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {{ request()->routeIs('orcamentos.*') ? 'active' : '' }}" href="#" id="navbarDropdownOrcamentos" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-file-earmark-medical-fill"></i> Orçamentos
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="navbarDropdownOrcamentos">
+                        <li><a class="dropdown-item {{ request()->routeIs('orcamentos.index') ? 'active' : '' }}" href="{{ route('orcamentos.index') }}">Listar Orçamentos</a></li>
+                        <li><a class="dropdown-item {{ request()->routeIs('orcamentos.create') ? 'active' : '' }}" href="{{ route('orcamentos.create') }}">Novo Orçamento</a></li>
+                    </ul>
+                </li>
+                @endif
+
+                {{-- ... outros itens de menu ... --}}
 
                 {{-- SERVIÇOS (Atendimentos) --}}
                 @if(in_array(Auth::user()->tipo_usuario, ['admin', 'tecnico', 'atendente']))
