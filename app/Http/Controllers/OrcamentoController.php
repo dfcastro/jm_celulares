@@ -17,6 +17,8 @@ use Illuminate\Validation\Rule;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use App\Notifications\OrcamentoParaClienteNotification; // Importar a nova notificação
+use Illuminate\Support\Facades\Notification; // Para enviar a notificação
 
 class OrcamentoController extends Controller
 {
@@ -653,7 +655,7 @@ class OrcamentoController extends Controller
         $dadosParaPdf = [
             'orcamento' => $orcamento,
             'dataImpressao' => Carbon::now(),
-            'nomeEmpresa' => config('app.name', 'JM Celulares'),
+            'nomeEmpresa' => 'JM Celulares',
             'enderecoEmpresa' => 'Alameda Capitão José Custódio, 130, Centro - Monte Azul - MG',
             'telefoneEmpresa' => '(38) 99269-6404',
             'emailEmpresa' => 'contato@jmcelulares.com.br',
@@ -662,5 +664,72 @@ class OrcamentoController extends Controller
         $nomeClienteSlug = Str::slug($orcamento->cliente->nome_completo ?? ($orcamento->nome_cliente_avulso ?? 'orcamento'), '_');
         $nomeArquivo = 'Orcamento_' . $orcamento->id . '_' . $nomeClienteSlug . '.pdf';
         return $pdf->stream($nomeArquivo);
+    }
+
+    /**
+     * Envia o orçamento por e-mail para o cliente.
+     */
+    public function enviarEmail(Request $request, Orcamento $orcamento)
+    {
+        // Garantir que o orçamento tem um cliente e um e-mail para envio
+        $destinatarioEmail = null;
+        if ($orcamento->cliente && $orcamento->cliente->email) {
+            $destinatarioEmail = $orcamento->cliente->email;
+        } elseif ($orcamento->email_cliente_avulso) {
+            $destinatarioEmail = $orcamento->email_cliente_avulso;
+        }
+
+        if (!$destinatarioEmail) {
+            return redirect()->route('orcamentos.show', $orcamento->id)
+                ->with('error', 'Não foi possível enviar o e-mail. O cliente não possui um endereço de e-mail associado a este orçamento.');
+        }
+
+
+        try {
+            // ANTES de enviar a notificação, vamos inspecionar os dados
+            Log::debug("Dados do Orçamento #{$orcamento->id} para notificação:");
+            Log::debug("Cliente Nome: " . ($orcamento->cliente->nome_completo ?? $orcamento->nome_cliente_avulso ?? 'N/A'));
+            Log::debug("Descrição Aparelho: " . $orcamento->descricao_aparelho);
+            // Adicione logs para outros campos que vão para a notificação, especialmente os que podem ter texto livre
+            Log::debug("Problema Relatado: " . $orcamento->problema_relatado_cliente);
+            foreach ($orcamento->itens as $item) {
+                Log::debug("Item Descrição: " . ($item->estoque->nome ?? $item->descricao_item_manual ?? 'N/A'));
+            }
+
+            // Tentar codificar para JSON aqui para ver se o erro acontece antes da fila
+            try {
+                $jsonPayloadTest = json_encode(new OrcamentoParaClienteNotification($orcamento));
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    Log::error("Erro de JSON encode ANTES da fila: " . json_last_error_msg());
+                } else {
+                    Log::info("Payload da notificação codificado para JSON com sucesso ANTES da fila.");
+                }
+            } catch (\Exception $e) {
+                Log::error("Exceção ao tentar codificar payload da notificação para JSON ANTES da fila: " . $e->getMessage());
+            }
+
+
+            if ($orcamento->cliente && method_exists($orcamento->cliente, 'notify')) {
+                Notification::send($orcamento->cliente, new OrcamentoParaClienteNotification($orcamento));
+            } else {
+                Notification::route('mail', $destinatarioEmail)
+                    ->notify(new OrcamentoParaClienteNotification($orcamento));
+            }
+
+            // Mudar status para "Aguardando Aprovação" se ainda estiver "Em Elaboração"
+            if ($orcamento->status === 'Em Elaboração') {
+                $orcamento->status = 'Aguardando Aprovação';
+                $orcamento->save();
+                return redirect()->route('orcamentos.show', $orcamento->id)
+                    ->with('success', "Orçamento #{$orcamento->id} enviado para {$destinatarioEmail} e status atualizado para 'Aguardando Aprovação'.");
+            }
+
+            return redirect()->route('orcamentos.show', $orcamento->id)
+                ->with('success', "Orçamento #{$orcamento->id} reenviado para {$destinatarioEmail} com sucesso!");
+        } catch (\Exception $e) {
+            Log::error("Erro ao enviar e-mail do orçamento #{$orcamento->id} para {$destinatarioEmail}: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->route('orcamentos.show', $orcamento->id)
+                ->with('error', 'Ocorreu um erro ao tentar enviar o e-mail do orçamento. Verifique os logs para mais detalhes.');
+        }
     }
 }

@@ -73,20 +73,16 @@ Route::middleware(['auth'])->group(function () {
     // Rotas para ações de status do orçamento
     Route::post('/orcamentos/{orcamento}/marcar-aguardando', [OrcamentoController::class, 'marcarComoAguardando'])
         ->name('orcamentos.marcarAguardando'); // Status: Em Elaboração -> Aguardando Aprovação
-
     Route::post('/orcamentos/{orcamento}/aprovar', [OrcamentoController::class, 'aprovarOrcamento'])
         ->name('orcamentos.aprovar'); // Status: Aguardando Aprovação -> Aprovado
-
     Route::post('/orcamentos/{orcamento}/reprovar', [OrcamentoController::class, 'reprovarOrcamento'])
         ->name('orcamentos.reprovar'); // Status: Aguardando Aprovação -> Reprovado
-
-    // Rota para gerar PDF do orçamento
     Route::get('/orcamentos/{orcamento}/pdf', [OrcamentoController::class, 'gerarPdf'])
-        ->name('orcamentos.pdf');
-
+        ->name('orcamentos.pdf');    // Rota para gerar PDF do orçamento
     Route::post('/orcamentos/{orcamento}/converter-os', [OrcamentoController::class, 'converterEmOs'])
-        ->name('orcamentos.converterEmOs');
-
+        ->name('orcamentos.converterEmOs'); //rota para converocamento em OS
+ Route::post('/orcamentos/{orcamento}/enviar-email', [OrcamentoController::class, 'enviarEmail'])
+        ->name('orcamentos.enviarEmail');// Rota para Enviar E-mail do Orçamento
 
 
 
