@@ -126,7 +126,8 @@ class VendaAcessorioController extends Controller
 
             DB::commit();
 
-            return redirect()->route('vendas-acessorios.index')->with('success', 'Venda de acessório registrada com sucesso!');
+            return redirect()->route('vendas-acessorios.show', $venda->id) // Redirecionar para show da venda
+            ->with('success', "Venda de acessório #{$venda->id} registrada com sucesso!");
         } catch (ValidationException $e) {
             DB::rollBack();
             return back()->withErrors($e->errors())->withInput();
@@ -195,11 +196,11 @@ class VendaAcessorioController extends Controller
 
             // Apaga a venda, o que automaticamente deletará as entradas na tabela pivô
             // devido ao onDelete('cascade') definido na migração 'venda_acessorio_estoque_table'.
-            $vendas_acessorio->delete();
-
-            DB::commit(); // Confirma a transação
-
-            return redirect()->route('vendas-acessorios.index')->with('success', 'Venda de acessório excluída e estoque revertido com sucesso!');
+            $idVendaExcluida = $vendas_acessorio->id;
+            $vendas_acessorio->delete(); // Após a lógica de reverter estoque
+            DB::commit();
+            return redirect()->route('vendas-acessorios.index')
+                             ->with('success', "Venda de acessório #{$idVendaExcluida} excluída e estoque revertido com sucesso!");
         } catch (\Exception $e) {
             DB::rollBack(); // Reverte a transação em caso de erro
             Log::error('Erro ao excluir venda de acessório: ' . $e->getMessage(), ['exception' => $e]);

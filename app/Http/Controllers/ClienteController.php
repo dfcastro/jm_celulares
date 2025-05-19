@@ -121,7 +121,7 @@ class ClienteController extends Controller
 
         // Para requisições normais, redireciona para a lista de clientes
         return redirect()->route('clientes.index')
-            ->with('success', 'Cliente cadastrado com sucesso!');
+        ->with('success', "Cliente '{$cliente->nome_completo}' (ID: {$cliente->id}) cadastrado com sucesso!");
     }
     /**
      * Display the specified resource.
@@ -192,7 +192,8 @@ class ClienteController extends Controller
 
         $cliente->update($data);
 
-        return redirect()->route('clientes.index')->with('success', 'Cliente atualizado com sucesso!');
+        return redirect()->route('clientes.index')
+        ->with('success', "Cliente '{$cliente->nome_completo}' (ID: {$cliente->id}) atualizado com sucesso!");
     }
     /**
      * Remove the specified resource from storage.
@@ -209,8 +210,11 @@ class ClienteController extends Controller
             return redirect()->route('clientes.index')->with('error', 'Este cliente possui atendimentos registrados e não pode ser excluído.');
         }
 
+        $nomeClienteExcluido = $cliente->nome_completo; // Salva o nome antes de excluir
+        $clienteIdExcluido = $cliente->id;
         $cliente->delete();
-        return redirect()->route('clientes.index')->with('success', 'Cliente excluído com sucesso!');
+        return redirect()->route('clientes.index')
+                         ->with('success', "Cliente '{$nomeClienteExcluido}' (ID: {$clienteIdExcluido}) excluído com sucesso!");
     }
 
     public function autocomplete(Request $request)

@@ -65,7 +65,10 @@ class EntradaEstoqueController extends Controller
 
         $estoque->increment('quantidade', $request->quantidade);
 
-        return redirect()->route('entradas-estoque.index')->with('success', 'Entrada de estoque registrada com sucesso!');
+        
+        $estoque->increment('quantidade', $request->quantidade);
+        return redirect()->route('entradas-estoque.index')
+                         ->with('success', "Entrada de {$request->quantidade} unidade(s) para '{$estoque->nome}' (ID Estoque: {$estoque->id}) registrada com sucesso!");
     }
 
     /**
@@ -146,11 +149,13 @@ class EntradaEstoqueController extends Controller
         $cantidadParaDecrement = (int) $entradaEstoque->quantidade;
 
         // Ajusta a quantidade no estoque principal (decrementa ao excluir uma entrada)
-        $estoque->decrement('quantidade', $cantidadParaDecrement);
-
-        // Exclui a entrada de estoque
+        
+        $nomePeca = $entradaEstoque->estoque->nome;
+        $qtdEstornada = $entradaEstoque->quantidade;
+        $idEntrada = $entradaEstoque->id;
+        $estoque->decrement('quantidade', $cantidadParaDecrement); // Aqui deveria ser decrement, pois estamos desfazendo uma entrada
         $entradaEstoque->delete();
-
-        return redirect()->route('entradas-estoque.index')->with('success', 'Entrada de estoque excluída com sucesso!');
+        return redirect()->route('entradas-estoque.index')
+                         ->with('success', "Entrada de estoque #{$idEntrada} ({$qtdEstornada} unidade(s) de '{$nomePeca}') excluída e estoque revertido com sucesso!");
     }
 }

@@ -49,14 +49,14 @@ class UsuarioController extends Controller
             'tipo_usuario.in' => 'O tipo de usuário selecionado é inválido.'
         ]);
 
-        User::create([
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password), // Importante: Hashear a senha
             'tipo_usuario' => $request->tipo_usuario,
         ]);
 
-        return redirect()->route('usuarios.index')->with('success', 'Usuário criado com sucesso!');
+       return redirect()->route('usuarios.index')  ->with('success', "Usuário '{$user->name}' criado com sucesso!");
     }
 
     /**
@@ -104,8 +104,8 @@ class UsuarioController extends Controller
         }
 
         $usuario->update($dadosAtualizar);
-
-        return redirect()->route('usuarios.index')->with('success', 'Usuário atualizado com sucesso!');
+        return redirect()->route('usuarios.index')
+                         ->with('success', "Usuário '{$usuario->name}' atualizado com sucesso!");
     }
 
     /**
@@ -141,7 +141,9 @@ class UsuarioController extends Controller
         //     Atendimento::where('tecnico_id', $usuario->id)->update(['tecnico_id' => null]);
         // }
 
+        $nomeUsuarioExcluido = $usuario->name;
         $usuario->delete();
-        return redirect()->route('usuarios.index')->with('success', 'Usuário excluído com sucesso.');
+        return redirect()->route('usuarios.index')
+                         ->with('success', "Usuário '{$nomeUsuarioExcluido}' excluído com sucesso.");
     }
 }

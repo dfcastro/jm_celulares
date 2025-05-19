@@ -90,9 +90,10 @@ class EstoqueController extends Controller
             'estoque_minimo' => 'nullable|integer|min:0',
         ]);
 
-        Estoque::create($request->all());
+        $itemEstoque = Estoque::create($request->all()); // Supondo que você atribua o novo item a $itemEstoque
+        return redirect()->route('estoque.index')
+            ->with('success', "Item '{$itemEstoque->nome}' (ID: {$itemEstoque->id}) adicionado ao estoque! Lembre-se de registrar a entrada inicial.");
 
-        return redirect()->route('estoque.index')->with('success', 'Peça adicionada ao estoque com sucesso! Lembre-se de registrar uma entrada para adicionar a quantidade inicial.');
     }
     /**
      * Display the specified resource.
@@ -118,11 +119,11 @@ class EstoqueController extends Controller
      */
     public function update(Request $request, Estoque $estoque)
     {
-        
-            // Permissão geral para editar o item de estoque (descrição, tipo, marca, etc. E AGORA PREÇOS)
-            if (Gate::denies('can-manage-basic-stock')) { // Ou 'is-internal-user' se preferir
-                 return redirect()->route('estoque.index')->with('error', 'Acesso não autorizado para editar este item de estoque.');
-            }
+
+        // Permissão geral para editar o item de estoque (descrição, tipo, marca, etc. E AGORA PREÇOS)
+        if (Gate::denies('can-manage-basic-stock')) { // Ou 'is-internal-user' se preferir
+            return redirect()->route('estoque.index')->with('error', 'Acesso não autorizado para editar este item de estoque.');
+        }
         // Validação dos dados do formulário
         // Validação básica dos campos que todos podem editar
         $validatedData = $request->validate([
@@ -168,7 +169,9 @@ class EstoqueController extends Controller
 
         $estoque->save();
 
-        return redirect()->route('estoque.index')->with('success', 'Peça do estoque atualizada com sucesso!');
+        $estoque->save();
+        return redirect()->route('estoque.index')
+                         ->with('success', "Item '{$estoque->nome}' (ID: {$estoque->id}) atualizado com sucesso!");
     }
 
     /**
@@ -187,8 +190,11 @@ class EstoqueController extends Controller
             }
 
             // Se não houver movimentações relacionadas, pode prosseguir com a exclusão
+            $nomeItemExcluido = $estoque->nome;
+            $itemIdExcluido = $estoque->id;
             $estoque->delete();
-            return redirect()->route('estoque.index')->with('success', 'Peça removida do estoque com sucesso!');
+            return redirect()->route('estoque.index')
+                             ->with('success', "Item '{$nomeItemExcluido}' (ID: {$itemIdExcluido}) removido do estoque com sucesso!");
 
         } catch (\Illuminate\Database\QueryException $e) {
             // Captura a exceção de violação de integridade (Foreign Key constraint fails)

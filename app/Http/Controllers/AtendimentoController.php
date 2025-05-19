@@ -143,7 +143,7 @@ class AtendimentoController extends Controller
         $atendimento = Atendimento::create($atendimentoData);
 
         return redirect()->route('atendimentos.show', $atendimento->id)
-            ->with('success', 'Atendimento Nº ' . $atendimento->id . ' registrado com sucesso! Código de consulta: ' . $novoCodigoConsulta);
+                 ->with('success', "Atendimento #{$atendimento->id} registrado! Cód. Consulta: {$novoCodigoConsulta}");
     }
 
     /**
@@ -262,7 +262,8 @@ class AtendimentoController extends Controller
             }
         }
 
-        return redirect()->route('atendimentos.show', $atendimento->id)->with('success', 'Atendimento atualizado com sucesso!');
+        return redirect()->route('atendimentos.show', $atendimento->id)
+        ->with('success', "Atendimento #{$atendimento->id} atualizado com sucesso!");
     }
 
 
