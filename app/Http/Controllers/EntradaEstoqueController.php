@@ -41,19 +41,18 @@ class EntradaEstoqueController extends Controller
     // app\Http\Controllers\EntradaEstoqueController.php - Método store
     public function store(Request $request)
     {
-        if (Gate::denies('can-manage-basic-stock')) { // Ou 'is-internal-user'
+        if (Gate::denies('can-manage-basic-stock')) {
             return redirect()->route('entradas-estoque.index')->with('error', 'Acesso não autorizado.');
         }
         $request->validate([
             'estoque_id' => 'required|exists:estoque,id',
             'quantidade' => 'required|integer|min:1',
-            'data_entrada' => 'required|date', // Apenas validação de data, sem hora
+            'data_entrada' => 'required|date',
             'observacoes' => 'nullable|string|max:255',
         ]);
 
         $estoque = Estoque::findOrFail($request->estoque_id);
 
-        // --- MODIFICADO: Combinar a data selecionada com a hora atual ---
         $dataEntradaFormulario = $request->input('data_entrada');
         $dataCompleta = Carbon::parse($dataEntradaFormulario)
             ->setTime(Carbon::now()->hour, Carbon::now()->minute, Carbon::now()->second);
@@ -63,12 +62,12 @@ class EntradaEstoqueController extends Controller
 
         EntradaEstoque::create($dadosEntrada);
 
+
+
         $estoque->increment('quantidade', $request->quantidade);
 
-        
-        $estoque->increment('quantidade', $request->quantidade);
         return redirect()->route('entradas-estoque.index')
-                         ->with('success', "Entrada de {$request->quantidade} unidade(s) para '{$estoque->nome}' (ID Estoque: {$estoque->id}) registrada com sucesso!");
+            ->with('success', "Entrada de {$request->quantidade} unidade(s) para '{$estoque->nome}' (ID Estoque: {$estoque->id}) registrada com sucesso!");
     }
 
     /**
@@ -139,23 +138,27 @@ class EntradaEstoqueController extends Controller
      */
     public function destroy($id)
     {
-        // Buscamos a EntradaEstoque pelo ID. findOrFail irá retornar 404 se não encontrar.
-        $entradaEstoque = EntradaEstoque::findOrFail($id); // findOrFail é importante para lançar 404 se o ID não existir
-
-        // Precisamos do objeto $entradaEstoque carregado para acessar estoque_id e quantidade
+        $entradaEstoque = EntradaEstoque::findOrFail($id);
         $estoque = Estoque::findOrFail($entradaEstoque->estoque_id);
-
-        // Antes de decrementar, garantimos que a quantidade é numérica (caso haja algum registro antigo com null)
         $cantidadParaDecrement = (int) $entradaEstoque->quantidade;
 
-        // Ajusta a quantidade no estoque principal (decrementa ao excluir uma entrada)
-        
-        $nomePeca = $entradaEstoque->estoque->nome;
+        $nomePeca = $estoque->nome; // Melhor pegar o nome da peça diretamente do objeto $estoque
         $qtdEstornada = $entradaEstoque->quantidade;
         $idEntrada = $entradaEstoque->id;
-        $estoque->decrement('quantidade', $cantidadParaDecrement); // Aqui deveria ser decrement, pois estamos desfazendo uma entrada
+
+        // VERIFICAÇÃO: Antes de decrementar, confira se o estoque ficaria negativo.
+        if ($estoque->quantidade < $cantidadParaDecrement) {
+            // Se a quantidade atual em estoque for menor que a quantidade da entrada
+            // que está sendo excluída, a exclusão resultaria em estoque negativo.
+            return redirect()->route('entradas-estoque.index')
+                ->with('error', "Não é possível excluir a entrada #{$idEntrada} ({$qtdEstornada} unidade(s) de '{$nomePeca}'). A exclusão resultaria em estoque negativo ({$estoque->quantidade} - {$cantidadParaDecrement} = " . ($estoque->quantidade - $cantidadParaDecrement) . "). Verifique as saídas de estoque para este item.");
+        }
+
+        // Se a verificação passar, prossiga com o decremento e exclusão.
+        $estoque->decrement('quantidade', $cantidadParaDecrement);
         $entradaEstoque->delete();
+
         return redirect()->route('entradas-estoque.index')
-                         ->with('success', "Entrada de estoque #{$idEntrada} ({$qtdEstornada} unidade(s) de '{$nomePeca}') excluída e estoque revertido com sucesso!");
+            ->with('success', "Entrada de estoque #{$idEntrada} ({$qtdEstornada} unidade(s) de '{$nomePeca}') excluída e estoque revertido com sucesso!");
     }
 }

@@ -127,7 +127,7 @@ class VendaAcessorioController extends Controller
             DB::commit();
 
             return redirect()->route('vendas-acessorios.show', $venda->id) // Redirecionar para show da venda
-            ->with('success', "Venda de acessório #{$venda->id} registrada com sucesso!");
+                ->with('success', "Venda de acessório #{$venda->id} registrada com sucesso!");
         } catch (ValidationException $e) {
             DB::rollBack();
             return back()->withErrors($e->errors())->withInput();
@@ -200,7 +200,7 @@ class VendaAcessorioController extends Controller
             $vendas_acessorio->delete(); // Após a lógica de reverter estoque
             DB::commit();
             return redirect()->route('vendas-acessorios.index')
-                             ->with('success', "Venda de acessório #{$idVendaExcluida} excluída e estoque revertido com sucesso!");
+                ->with('success', "Venda de acessório #{$idVendaExcluida} excluída e estoque revertido com sucesso!");
         } catch (\Exception $e) {
             DB::rollBack(); // Reverte a transação em caso de erro
             Log::error('Erro ao excluir venda de acessório: ' . $e->getMessage(), ['exception' => $e]);

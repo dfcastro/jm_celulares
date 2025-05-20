@@ -1,6 +1,6 @@
 @extends('layouts.app') {{-- Estende o layout base --}}
 
-@section('title', 'Cadastro de Clientes') {{-- Título da página --}}
+@section('title', 'Detalhes da Venda') {{-- Título da página --}}
 
 @section('content') {{-- Conteúdo principal da página --}}
     <div class="container mt-0"> {{-- Removi mt-5 pois o layout já tem padding --}}
@@ -75,8 +75,7 @@
 
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    @endsection
+        @endsection
 
 {{-- Para esta página, não precisamos de @push('styles') ou @push('scripts') geralmente --}}
 {{-- Mas se você fosse adicionar ícones do Bootstrap, por exemplo: --}}
