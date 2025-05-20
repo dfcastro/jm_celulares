@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log; // Confirme que esta linha está aqui e sem a barra invertida (\)
 use Carbon\Carbon; // <<<<<<< ADICIONE ESTA LINHA PARA TRABALHAR COM DATAS
+use App\Models\Caixa; // Adicionar esta linha
+use App\Models\MovimentacaoCaixa; // Adicionar esta linha
+use Illuminate\Support\Facades\Auth; // Se não estiver lá, para pegar o usuário logado
+
 
 class VendaAcessorioController extends Controller
 {
@@ -50,106 +54,131 @@ class VendaAcessorioController extends Controller
      */
     public function store(Request $request)
     {
-        // ... (método store completo e inalterado, conforme as últimas correções) ...
-        $request->validate([
-            'data_venda' => 'required|date',
+        // 1. Validação dos dados da venda (você já deve ter isso)
+        $validatedData = $request->validate([
             'cliente_id' => 'nullable|exists:clientes,id',
-            'forma_pagamento' => 'nullable|string|max:255', // Validação será ajustada no Passo 3
+            'data_venda' => 'required|date',
+            'forma_pagamento' => 'nullable|string|max:50',
             'observacoes' => 'nullable|string',
             'itens' => 'required|array|min:1',
-            'itens.*.estoque_id' => 'required|exists:estoque,id',
+            'itens.*.item_estoque_id' => 'required|exists:estoque,id',
             'itens.*.quantidade' => 'required|integer|min:1',
-            'itens.*.preco_unitario_venda' => 'required|numeric|min:0',
+            'itens.*.preco_unitario' => 'required|numeric|min:0',
             'itens.*.desconto' => 'nullable|numeric|min:0',
-        ], [
-            'itens.required' => 'É necessário adicionar pelo menos um item à venda.',
-            'itens.*.estoque_id.required' => 'O campo peça é obrigatório para cada item.',
-            'itens.*.estoque_id.exists' => 'A peça selecionada para um dos itens não existe.',
-            'itens.*.quantidade.required' => 'A quantidade é obrigatória para cada item.',
-            'itens.*.quantidade.min' => 'A quantidade para cada item deve ser pelo menos 1.',
-            'itens.*.preco_unitario_venda.required' => 'O preço unitário é obrigatório para cada item.',
-            'itens.*.preco_unitario_venda.min' => 'O preço unitário não pode ser negativo.',
-            'itens.*.desconto.min' => 'O desconto não pode ser negativo.',
         ]);
 
-        DB::beginTransaction();
-        try {
-            $valorTotalVenda = 0;
-            $itensParaVenda = [];
-            $errosEstoque = [];
+        // ---- INÍCIO DA LÓGICA DE TRANSAÇÃO (OPCIONAL MAS RECOMENDADO) ----
+        // DB::beginTransaction();
+        // try {
+        // ---- FIM DA LÓGICA DE TRANSAÇÃO ----
 
-            foreach ($request->itens as $index => $itemInput) {
-                $estoqueItem = Estoque::find($itemInput['estoque_id']);
+        // 2. Criação da VendaAcessorio (você já deve ter isso)
+        $vendaAcessorio = new VendaAcessorio();
+        $vendaAcessorio->cliente_id = $validatedData['cliente_id'];
+        // A data_venda já vem formatada do formulário create (Y-m-d),
+        // mas se vier como d/m/Y, precisa converter: Carbon::createFromFormat('d/m/Y', $validatedData['data_venda'])->toDateString();
+        // Para datetime, se o campo for datetime:
+        $vendaAcessorio->data_venda = Carbon::parse($validatedData['data_venda'])->toDateTimeString();
+        $vendaAcessorio->valor_total = 0; // Será calculado abaixo
+        $vendaAcessorio->forma_pagamento = $validatedData['forma_pagamento'];
+        $vendaAcessorio->observacoes = $validatedData['observacoes'];
+        $vendaAcessorio->user_id = Auth::id(); // Usuário que registrou a venda
+        $vendaAcessorio->save();
 
-                if (!$estoqueItem) {
-                    $errosEstoque[] = "Item de estoque com ID {$itemInput['estoque_id']} não encontrado.";
-                    continue;
-                }
+        // 3. Processamento dos Itens da Venda e Cálculo do Valor Total (você já deve ter isso)
+        $valorTotalCalculado = 0;
+        foreach ($validatedData['itens'] as $itemVendaData) {
+            $itemEstoque = Estoque::findOrFail($itemVendaData['item_estoque_id']);
+            $quantidadeVendida = (int) $itemVendaData['quantidade'];
+            $precoUnitario = (float) $itemVendaData['preco_unitario'];
+            $descontoItem = (float) ($itemVendaData['desconto'] ?? 0);
 
-                $quantidadeSolicitada = (int) $itemInput['quantidade'];
-                $precoUnitario = (float) $itemInput['preco_unitario_venda'];
-                $descontoItem = (float) ($itemInput['desconto'] ?? 0);
-
-                if ($quantidadeSolicitada > $estoqueItem->quantidade) {
-                    $errosEstoque[] = "Quantidade insuficiente para '{$estoqueItem->nome}' (Disponível: {$estoqueItem->quantidade}, Solicitado: {$quantidadeSolicitada}).";
-                    continue;
-                }
-
-                $subtotalItem = ($quantidadeSolicitada * $precoUnitario) - $descontoItem;
-                $subtotalItem = max(0, $subtotalItem);
-
-                $valorTotalVenda += $subtotalItem;
-
-                $itensParaVenda[$estoqueItem->id] = [
-                    'quantidade' => $quantidadeSolicitada,
-                    'preco_unitario_venda' => $precoUnitario,
-                    'desconto' => $descontoItem,
-                ];
-
-                $estoqueItem->decrement('quantidade', $quantidadeSolicitada);
+            // Validação de estoque (IMPORTANTE)
+            if ($itemEstoque->quantidade < $quantidadeVendida) {
+                // DB::rollBack(); // Se estiver usando transação
+                return redirect()->back()
+                    ->with('error', "Estoque insuficiente para o item '{$itemEstoque->nome}'. Disponível: {$itemEstoque->quantidade}, Solicitado: {$quantidadeVendida}.")
+                    ->withInput();
             }
 
-            if (!empty($errosEstoque)) {
-                DB::rollBack();
-                throw ValidationException::withMessages(['itens' => $errosEstoque]);
-            }
+            $subtotalItem = ($quantidadeVendida * $precoUnitario) - $descontoItem;
+            $valorTotalCalculado += $subtotalItem;
 
-            $venda = VendaAcessorio::create([
-                'cliente_id' => $request->cliente_id,
-                'data_venda' => $request->data_venda,
-                'valor_total' => $valorTotalVenda,
-                'forma_pagamento' => $request->forma_pagamento,
-                'observacoes' => $request->observacoes,
+            // Adicionar item à tabela pivot venda_acessorio_estoque
+            $vendaAcessorio->itensEstoque()->attach($itemEstoque->id, [
+                'quantidade' => $quantidadeVendida,
+                'preco_unitario_venda' => $precoUnitario,
+                'desconto' => $descontoItem,
             ]);
 
-            $venda->itensVendidos()->attach($itensParaVenda);
+            // Decrementar estoque
+            $itemEstoque->decrement('quantidade', $quantidadeVendida);
 
-            DB::commit();
-
-            return redirect()->route('vendas-acessorios.show', $venda->id) // Redirecionar para show da venda
-                ->with('success', "Venda de acessório #{$venda->id} registrada com sucesso!");
-        } catch (ValidationException $e) {
-            DB::rollBack();
-            return back()->withErrors($e->errors())->withInput();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Erro ao registrar venda de acessório: ' . $e->getMessage(), ['exception' => $e]);
-            return back()->with('error', 'Ocorreu um erro inesperado ao registrar a venda. Tente novamente mais tarde.')->withInput();
+            // Registrar Saída de Estoque (se você tiver essa lógica separada também)
+            // SaidaEstoque::create([...]);
         }
+
+        // Atualizar o valor total da venda
+        $vendaAcessorio->valor_total = $valorTotalCalculado;
+        $vendaAcessorio->save();
+
+
+        // 4. ***** NOVA LÓGICA: REGISTRAR MOVIMENTAÇÃO NO CAIXA *****
+        $caixaAberto = Caixa::getCaixaAbertoAtual();
+
+        if ($caixaAberto) {
+            if ($vendaAcessorio->valor_total > 0) { // Só registra se houver valor
+                MovimentacaoCaixa::create([
+                    'caixa_id' => $caixaAberto->id,
+                    'usuario_id' => Auth::id(), // Usuário que fez a venda/registrou no caixa
+                    'tipo' => 'ENTRADA',
+                    'descricao' => "Recebimento Venda de Acessório #" . $vendaAcessorio->id,
+                    'valor' => $vendaAcessorio->valor_total,
+                    'forma_pagamento' => $vendaAcessorio->forma_pagamento, // Assume que a forma de pagamento da venda é a do caixa
+                    'referencia_id' => $vendaAcessorio->id,
+                    'referencia_tipo' => VendaAcessorio::class, // Eloquent usará o namespace completo
+                    'data_movimentacao' => Carbon::now(), // Ou $vendaAcessorio->data_venda se preferir
+                    'observacoes' => 'Venda registrada pelo sistema.',
+                ]);
+            }
+        } else {
+            // Opcional: Lidar com o caso de não haver caixa aberto.
+            // Poderia ser um warning na sessão, um log, ou impedir a venda se o caixa aberto for obrigatório.
+            // Por enquanto, apenas não registra no caixa se não houver um aberto.
+            // Session::flash('warning', 'Nenhum caixa aberto. A movimentação financeira desta venda não foi registrada no caixa.');
+        }
+        // ***** FIM DA NOVA LÓGICA *****
+
+
+        // ---- INÍCIO DA LÓGICA DE TRANSAÇÃO (OPCIONAL MAS RECOMENDADO) ----
+        // DB::commit();
+        return redirect()->route('vendas-acessorios.show', $vendaAcessorio->id)
+            ->with('success', 'Venda de acessório registrada com sucesso!');
+        // } catch (\Exception $e) {
+        //     DB::rollBack();
+        //     // Log::error("Erro ao registrar venda de acessório: " . $e->getMessage());
+        //     return redirect()->back()
+        //                      ->with('error', 'Erro ao registrar a venda. Tente novamente. Detalhes: ' . $e->getMessage())
+        //                      ->withInput();
+        // }
+        // ---- FIM DA LÓGICA DE TRANSAÇÃO ----
     }
 
     /**
      * Display the specified resource.
      */
-    public function show($id)
+    public function show(VendaAcessorio $vendas_acessorio) // O nome da variável DEVE ser igual ao parâmetro da rota
     {
-        $vendaAcessorio = VendaAcessorio::find($id);
-        if (!$vendaAcessorio) {
-            abort(404);
-        }
-        $vendaAcessorio->load('itensVendidos');
+        // A variável $vendas_acessorio já é a instância do model VendaAcessorio.
+        // O Laravel já fez o findOrFail nos bastidores.
 
-        return view('vendas_acessorios.show', compact('vendaAcessorio', 'id'));
+        $vendas_acessorio->load([
+            'itensEstoque',
+            'cliente',
+            'usuarioRegistrou' // Se você tem esse relacionamento no model VendaAcessorio
+        ]);
+
+        return view('vendas_acessorios.show', ['vendaAcessorio' => $vendas_acessorio]);
     }
 
     /**

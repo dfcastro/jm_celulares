@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 
 use App\Models\SaidaEstoque; // Exemplo de model para binding
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\CaixaController;
+use App\Http\Controllers\MovimentacaoCaixaController;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\AtendimentoController;
 use App\Http\Controllers\ConsultaStatusController;
@@ -81,7 +83,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('orcamentos.pdf');    // Rota para gerar PDF do orçamento
     Route::post('/orcamentos/{orcamento}/converter-os', [OrcamentoController::class, 'converterEmOs'])
         ->name('orcamentos.converterEmOs'); //rota para converocamento em OS
- Route::post('/orcamentos/{orcamento}/enviar-email', [OrcamentoController::class, 'enviarEmail'])
+    Route::post('/orcamentos/{orcamento}/enviar-email', [OrcamentoController::class, 'enviarEmail'])
         ->name('orcamentos.enviarEmail');// Rota para Enviar E-mail do Orçamento
 
 
@@ -101,6 +103,22 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/atendimentos/{atendimento}/atualizar-valores-servico', [App\Http\Controllers\AtendimentoController::class, 'atualizarValoresServicoAjax'])
         ->name('atendimentos.atualizarValoresServicoAjax');
     // A rota de autocomplete de atendimentos está pública acima.
+
+    // Rotas para Controle de Caixa
+    Route::prefix('caixa')->name('caixa.')->group(function () {
+        Route::get('/', [CaixaController::class, 'index'])->name('index'); // << Deve chamar CaixaController@index
+        Route::get('/abrir', [CaixaController::class, 'create'])->name('create'); // Formulário para abrir caixa
+        Route::post('/abrir', [CaixaController::class, 'store'])->name('store'); // Processar abertura do caixa
+        Route::get('/{caixa}/visualizar', [CaixaController::class, 'show'])->name('show'); // Ver caixa aberto ou detalhes de um fechado
+        // Futuras rotas para fechamento, movimentações manuais, etc.
+        Route::get('/{caixa}/fechar', [CaixaController::class, 'editFechar'])->name('editFechar');
+        Route::post('/{caixa}/fechar', [CaixaController::class, 'fechar'])->name('fechar');
+        Route::get('/{caixa}/movimentacao/nova/{tipo}', [MovimentacaoCaixaController::class, 'create'])->name('movimentacao.create');
+        Route::post('/{caixa}/movimentacao', [MovimentacaoCaixaController::class, 'store'])->name('movimentacao.store');
+        // NOVAS ROTAS PARA MOVIMENTAÇÕES MANUAIS
+        Route::get('/{caixa}/movimentacao/nova/{tipo}', [CaixaController::class, 'createMovimentacao'])->name('movimentacao.create'); // 'tipo' pode ser 'entrada' ou 'saida'
+        Route::post('/{caixa}/movimentacao', [CaixaController::class, 'storeMovimentacao'])->name('movimentacao.store');
+    });
 
     // Estoque
     Route::get('/estoque/historico-unificado', [EstoqueController::class, 'historicoUnificado'])->name('estoque.historico_unificado');

@@ -53,5 +53,10 @@ class AuthServiceProvider extends ServiceProvider // <<<< GARANTA QUE ESTENDE Se
         Gate::define('is-internal-user', function ($user) {
             return $user && in_array($user->tipo_usuario, ['admin', 'tecnico', 'atendente']);
         });
+        Gate::define('gerenciar-caixa', function ($user) {
+            // Apenas Admin e Atendente podem gerenciar o caixa
+            return $user->tipo_usuario === 'admin' || $user->tipo_usuario === 'atendente';
+        });
+        
     }
 }

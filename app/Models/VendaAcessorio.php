@@ -6,10 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany; // Importe esta linha
-use App\Models\Cliente;
-use App\Models\Estoque;
-use App\Models\DevolucaoVenda; // Importe o novo modelo DevolucaoVenda
+use Carbon\Carbon;
 
 class VendaAcessorio extends Model
 {
@@ -18,7 +15,8 @@ class VendaAcessorio extends Model
     protected $table = 'vendas_acessorios';
 
     protected $fillable = [
-        'cliente_id',
+        'cliente_id',       // Para o cliente que compra
+        'user_id',          // Para o usuário do sistema que registra a venda (NOVO AQUI)
         'data_venda',
         'valor_total',
         'forma_pagamento',
@@ -26,7 +24,7 @@ class VendaAcessorio extends Model
     ];
 
     protected $casts = [
-        'data_venda' => 'datetime',
+        'data_venda' => 'datetime', // Ajuste para 'date' se sua coluna for apenas DATE
         'valor_total' => 'decimal:2',
     ];
 
@@ -35,17 +33,24 @@ class VendaAcessorio extends Model
         return $this->belongsTo(Cliente::class);
     }
 
-    public function itensVendidos(): BelongsToMany
+    // Adicione este relacionamento para o usuário que registrou a venda
+    public function usuarioRegistrou(): BelongsTo // Ou simplesmente user()
     {
-        return $this->belongsToMany(Estoque::class, 'venda_acessorio_estoque', 'venda_acessorio_id', 'estoque_id')
-                    ->withPivot('quantidade', 'preco_unitario_venda', 'desconto');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
-    /**
-     * Define o relacionamento com DevolucaoVenda.
-     */
-    public function devolucoesVendas(): HasMany // Adicione este método
+    public function itensEstoque(): BelongsToMany
     {
-        return $this->hasMany(DevolucaoVenda::class, 'venda_acessorio_id');
+        return $this->belongsToMany(Estoque::class, 'venda_acessorio_estoque', 'venda_acessorio_id', 'estoque_id')
+            ->withPivot('quantidade', 'preco_unitario_venda', 'desconto')
+            ->withTimestamps();
+    }
+
+    public function getDataVendaFormatadaAttribute()
+    {
+        if ($this->data_venda) {
+            return Carbon::parse($this->data_venda)->format('d/m/Y H:i');
+        }
+        return null;
     }
 }
