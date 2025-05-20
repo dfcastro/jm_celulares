@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Atendimento;
 use App\Models\Cliente;
+use App\Models\MovimentacaoCaixa;
+use App\Models\Caixa;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -143,7 +145,7 @@ class AtendimentoController extends Controller
         $atendimento = Atendimento::create($atendimentoData);
 
         return redirect()->route('atendimentos.show', $atendimento->id)
-                 ->with('success', "Atendimento #{$atendimento->id} registrado! Cód. Consulta: {$novoCodigoConsulta}");
+            ->with('success', "Atendimento #{$atendimento->id} registrado! Cód. Consulta: {$novoCodigoConsulta}");
     }
 
     /**
@@ -165,107 +167,233 @@ class AtendimentoController extends Controller
         }
         $clientes = Cliente::orderBy('nome_completo')->get();
         $tecnicos = User::where('tipo_usuario', 'tecnico')->orderBy('name')->get();
-        return view('atendimentos.edit', compact('atendimento', 'clientes', 'tecnicos'));
+        $formasPagamento = ['Dinheiro', 'Cartão de Débito', 'Cartão de Crédito', 'PIX', 'Boleto', 'Outro']; // Ou de um config/enum
+        return view('atendimentos.edit', compact('atendimento', 'clientes', 'tecnicos', 'formasPagamento'));
     }
-
-    /**
-     * Update the specified resource in storage.
-     */
+    // Em app/Http/Controllers/AtendimentoController.php
     public function update(Request $request, Atendimento $atendimento)
     {
+        // Verificação de permissão básica para editar
         if (Gate::denies('is-internal-user')) {
             return redirect()->route('atendimentos.show', $atendimento->id)->with('error', 'Acesso não autorizado para editar.');
         }
 
+        // Defina aqui os status que indicam que o pagamento foi efetivamente recebido
+        $statusDePagamentoRecebido = ['Entregue', 'Finalizado e Pago', 'Pago']; // <<<< AJUSTE ESTA LISTA CONFORME SEUS STATUS
+
+        // Validações dos dados recebidos
         $validatedData = $request->validate([
             'cliente_id' => 'required|exists:clientes,id',
             'descricao_aparelho' => 'required|string|max:255',
             'problema_relatado' => 'required|string',
-            // 'data_entrada' não é editável aqui
-            'status' => ['required', 'string', Rule::in(Atendimento::getPossibleStatuses())],
+            // 'data_entrada' geralmente não é editável após a criação.
+            'status' => ['required', 'string', Rule::in(Atendimento::getPossibleStatuses())], // Garanta que Atendimento::getPossibleStatuses() exista e retorne um array de strings
             'tecnico_id' => 'nullable|exists:users,id',
             'data_conclusao' => [
                 'nullable',
-                'date',
-                function ($attribute, $value, $fail) use ($atendimento) { // Removido $request aqui
-                    $dataEntradaOriginal = $atendimento->data_entrada;
+                'date', // Se o input for do tipo date. Se for datetime-local, use 'date_format:Y-m-d\TH:i'
+                function ($attribute, $value, $fail) use ($atendimento) {
+                    $dataEntradaOriginal = $atendimento->data_entrada; // Assumindo que data_entrada é um objeto Carbon devido a casts no model
                     if ($value && $dataEntradaOriginal && Carbon::parse($value)->lt($dataEntradaOriginal)) {
                         $fail('A data de conclusão não pode ser anterior à data de entrada original (' . $dataEntradaOriginal->format('d/m/Y') . ').');
                     }
                 }
             ],
-            'observacoes' => 'nullable|string',
+            'observacoes' => 'nullable|string', // Este campo pode ser 'observacoes_cliente' ou 'observacoes_tecnicas' dependendo do seu form. Ajuste se necessário.
             'laudo_tecnico' => 'nullable|string',
-            'valor_servico' => 'nullable|numeric|min:0',
+            'valor_servico' => ['nullable', 'numeric', 'min:0'],
             'desconto_servico' => [
                 'nullable',
                 'numeric',
                 'min:0',
                 function ($attribute, $value, $fail) use ($request, $atendimento) {
-                    $valorServico = $request->input('valor_servico', $atendimento->valor_servico ?? 0);
-                    if ($value > $valorServico) {
+                    // Pega o valor do serviço do request (se estiver sendo alterado) ou o valor original do atendimento.
+                    $valorServicoParaValidacao = $request->input('valor_servico', $atendimento->getOriginal('valor_servico') ?? 0);
+                    if (is_numeric($value) && is_numeric($valorServicoParaValidacao) && (float)$value > (float)$valorServicoParaValidacao) {
                         $fail('O desconto não pode ser maior que o valor do serviço.');
                     }
                 }
             ],
+            'forma_pagamento' => [
+                Rule::requiredIf(function () use ($request, $statusDePagamentoRecebido) {
+                    $valorServico = $request->input('valor_servico', 0);
+                    $descontoServico = $request->input('desconto_servico', 0);
+                    $valorCobrado = (float)$valorServico - (float)$descontoServico;
+                    return in_array($request->input('status'), $statusDePagamentoRecebido) && $valorCobrado > 0;
+                }),
+                'nullable', // Permite ser nulo se não for um status de pagamento ou se valor for zero
+                'string',
+                'max:50',
+                // Certifique-se que estas opções são as mesmas do seu <select> no formulário
+                Rule::in(['Dinheiro', 'Cartão de Débito', 'Cartão de Crédito', 'PIX', 'Boleto', 'Outro', ''])
+            ],
         ]);
 
-        $statusAntigo = $atendimento->status;
-        $novoStatus = $validatedData['status'];
+        // Captura valores ANTES do update para comparação posterior
+        $statusAnterior = $atendimento->getOriginal('status');
+        $valorServicoAnterior = (float)$atendimento->getOriginal('valor_servico');
+        $descontoAnterior = (float)($atendimento->getOriginal('desconto_servico') ?? 0);
+        $formaPagamentoAnterior = $atendimento->getOriginal('forma_pagamento');
+        $valorLiquidoAnterior = $valorServicoAnterior - $descontoAnterior;
 
-        // Permissões para campos específicos
+        // Lógica de permissão para campos específicos (laudo, valores)
         if ($request->has('laudo_tecnico') && $atendimento->laudo_tecnico !== $request->input('laudo_tecnico')) {
             if (Gate::denies('is-admin-or-tecnico')) {
                 return redirect()->back()->withErrors(['laudo_tecnico' => 'Você não tem permissão para alterar o laudo técnico.'])->withInput();
             }
         }
 
-        $valorServicoMudou = $request->filled('valor_servico') && $atendimento->valor_servico != $request->valor_servico;
-        $descontoServicoMudou = $request->filled('desconto_servico') && $atendimento->desconto_servico != $request->desconto_servico;
+        $valorServicoMudou = $request->filled('valor_servico') && (float)$atendimento->getOriginal('valor_servico') != (float)$request->valor_servico;
+        $descontoServicoMudou = $request->filled('desconto_servico') && (float)($atendimento->getOriginal('desconto_servico') ?? 0) != (float)($request->desconto_servico ?? 0);
 
         if (($valorServicoMudou || $descontoServicoMudou) && Gate::denies('is-admin')) {
             return redirect()->back()->withErrors(['valor_servico' => 'Você não tem permissão para alterar valores financeiros.'])->withInput();
         }
 
-        // Lógica de permissão para mudança de status
-        if ($statusAntigo !== $novoStatus) {
+        // Lógica de permissão para mudança de status (mantendo sua lógica original)
+        $novoStatus = $validatedData['status'];
+        if ($statusAnterior !== $novoStatus) {
             $permitidoMudarStatus = false;
             $usuarioAtual = Auth::user();
+            // IMPORTANTE: Ajuste $usuarioAtual->tipo_usuario para $usuarioAtual->role ou o campo correto do seu User Model
             if ($usuarioAtual->tipo_usuario == 'admin') {
                 $permitidoMudarStatus = true;
-            } elseif ($usuarioAtual->tipo_usuario == 'tecnico' && !in_array($novoStatus, ['Entregue', 'Cancelado'])) { // Exemplo de restrição para técnico
+            } elseif ($usuarioAtual->tipo_usuario == 'tecnico' && !in_array($novoStatus, ['Entregue', 'Cancelado', 'Finalizado e Pago', 'Pago'])) { // Evita que técnico finalize pagamento
                 $permitidoMudarStatus = true;
-            } elseif ($usuarioAtual->tipo_usuario == 'atendente' && in_array($novoStatus, ['Em diagnóstico', 'Aguardando peça', 'Pronto para entrega', 'Entregue'])) {
-                $permitidoMudarStatus = true;
-                if (($statusAntigo == 'Pronto para entrega' || $statusAntigo == 'Em diagnóstico' || $statusAntigo == 'Aguardando peça' || $statusAntigo == 'Em manutenção') && $novoStatus == 'Entregue')
+            } elseif ($usuarioAtual->tipo_usuario == 'atendente') {
+                // Adapte sua lógica de transições permitidas para atendentes
+                $transicoesAtendentePermitidas = [
+                    'Em aberto' => ['Em diagnóstico', 'Cancelado'],
+                    'Em diagnóstico' => ['Aguardando peça', 'Aguardando aprovação cliente', 'Em manutenção', 'Cancelado'],
+                    'Aguardando peça' => ['Em manutenção', 'Cancelado', 'Pronto para entrega'],
+                    'Aguardando aprovação cliente' => ['Em manutenção', 'Cancelado', 'Recusado pelo cliente'],
+                    'Em manutenção' => ['Pronto para entrega', 'Aguardando peça', 'Cancelado'],
+                    'Pronto para entrega' => ['Entregue', 'Pago', 'Finalizado e Pago', 'Cancelado'],
+                ];
+                if (isset($transicoesAtendentePermitidas[$statusAnterior]) && in_array($novoStatus, $transicoesAtendentePermitidas[$statusAnterior])) {
                     $permitidoMudarStatus = true;
-                if (($statusAntigo == 'Em diagnóstico' || $statusAntigo == 'Aguardando peça') && $novoStatus == 'Pronto para entrega')
+                }
+                // Se for um status inicial (ex: atendente criando um atendimento novo e definindo o primeiro status)
+                if (Atendimento::getInitialStatuses() && in_array($novoStatus, Atendimento::getInitialStatuses())) {
                     $permitidoMudarStatus = true;
-
-
+                }
             }
+
             if (!$permitidoMudarStatus) {
-                return redirect()->back()->withErrors(['status' => 'Você não tem permissão para alterar o atendimento para o status: ' . $novoStatus])->withInput();
+                return redirect()->back()->withErrors(['status' => 'Você não tem permissão para alterar o atendimento do status "' . $statusAnterior . '" para o status: "' . $novoStatus . '"'])->withInput();
             }
         }
 
+        // Atualiza o atendimento com todos os dados validados
         $atendimento->update($validatedData);
 
-        if ($atendimento->status == 'Pronto para entrega' && $statusAntigo != 'Pronto para entrega') {
+        // ----- INÍCIO DA LÓGICA DE REGISTRO NO CAIXA -----
+        $mensagemParaUsuario = "Atendimento #{$atendimento->id} atualizado com sucesso!";
+        $feedbackTipo = 'success'; // Tipo de feedback padrão
+
+        $novoStatusAposUpdate = $atendimento->status; // Status após o update
+        $novoValorServico = (float)($atendimento->valor_servico ?? 0);
+        $novoDesconto = (float)($atendimento->desconto_servico ?? 0);
+        $novaFormaPagamento = $atendimento->forma_pagamento;
+        $novoValorCobradoEfetivamente = $novoValorServico - $novoDesconto;
+
+        $deveRegistrarNoCaixa = false;
+
+        Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Status Anterior: {$statusAnterior}, Novo Status: {$novoStatusAposUpdate}");
+        Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Valor Liq. Anterior: {$valorLiquidoAnterior}, Novo Valor Liq.: {$novoValorCobradoEfetivamente}");
+        Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Forma Pgto Anterior: {$formaPagamentoAnterior}, Nova Forma Pgto: {$novaFormaPagamento}");
+
+        // Condição 1: Mudou de um status NÃO PAGO para um status PAGO nesta atualização
+        if (!in_array($statusAnterior, $statusDePagamentoRecebido) && in_array($novoStatusAposUpdate, $statusDePagamentoRecebido)) {
+            $deveRegistrarNoCaixa = true;
+            Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição 1 MET - Transição para status de pagamento.");
+        }
+        // Condição 2: Já estava PAGO (e continua PAGO), mas o VALOR LÍQUIDO ou FORMA DE PAGAMENTO mudaram.
+        elseif (in_array($statusAnterior, $statusDePagamentoRecebido) && in_array($novoStatusAposUpdate, $statusDePagamentoRecebido)) {
+            if (bccomp((string)$novoValorCobradoEfetivamente, (string)$valorLiquidoAnterior, 2) != 0 || $novaFormaPagamento !== $formaPagamentoAnterior) {
+                // Verifica se já existe uma movimentação para este atendimento com os NOVOS valores
+                $movimentacaoExistenteComNovosValores = MovimentacaoCaixa::where('referencia_tipo', Atendimento::class)
+                    ->where('referencia_id', $atendimento->id)
+                    ->where('valor', $novoValorCobradoEfetivamente) // Comparação exata do valor
+                    ->where('forma_pagamento', $novaFormaPagamento)   // Comparação exata da forma de pagamento
+                    ->latest('data_movimentacao') // Pega a mais recente, caso haja múltiplas por algum motivo
+                    ->first();
+
+                if (!$movimentacaoExistenteComNovosValores) {
+                    $deveRegistrarNoCaixa = true;
+                    Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição 2 MET - Já estava pago, mas valor/forma mudou E NÃO existe mov. idêntica com os novos dados.");
+                    session()->flash('warning_caixa', 'Os detalhes financeiros do atendimento pago foram alterados. Uma nova movimentação de caixa será gerada. Verifique o caixa.');
+                } else {
+                    Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição 2 NÃO MET - Já estava pago, valor/forma mudou, MAS JÁ EXISTE mov. idêntica com os novos dados.");
+                }
+            } else {
+                Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição 2 NÃO MET - Já estava pago, e valor/forma NÃO mudaram.");
+            }
+        }
+
+        if ($deveRegistrarNoCaixa && $novoValorCobradoEfetivamente > 0 && !empty($novaFormaPagamento)) {
+            Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condições financeiras OK para registrar (Valor: {$novoValorCobradoEfetivamente}, Forma: {$novaFormaPagamento}). Buscando caixa.");
+            $caixaAberto = Caixa::getCaixaAbertoAtual();
+
+            if ($caixaAberto) {
+                Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Caixa Aberto #{$caixaAberto->id}. Registrando movimentação.");
+                MovimentacaoCaixa::create([
+                    'caixa_id' => $caixaAberto->id,
+                    'usuario_id' => Auth::id(),
+                    'tipo' => 'ENTRADA',
+                    'descricao' => "Recebimento OS/Atendimento #" . $atendimento->id,
+                    'valor' => $novoValorCobradoEfetivamente,
+                    'forma_pagamento' => $novaFormaPagamento,
+                    'referencia_id' => $atendimento->id,
+                    'referencia_tipo' => Atendimento::class,
+                    'data_movimentacao' => Carbon::now(),
+                    'observacoes' => 'Pagamento de serviço registrado pelo sistema (via Edição Completa).',
+                ]);
+                $mensagemAdicionalCaixa = ' Recebimento de R$ ' . number_format($novoValorCobradoEfetivamente, 2, ',', '.') . ' registrado no caixa #' . $caixaAberto->id . '.';
+
+                if (session()->has('warning_caixa')) {
+                    $mensagemParaUsuario = session('warning_caixa') . $mensagemAdicionalCaixa;
+                    $feedbackTipo = 'warning'; // Mantém o warning se houve alteração de pagamento já pago
+                } else {
+                    $mensagemParaUsuario .= $mensagemAdicionalCaixa;
+                    // $feedbackTipo já é 'success'
+                }
+            } else {
+                Log::warning("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Caixa NÃO encontrado. Não registrou no caixa.");
+                $mensagemParaUsuario .= ' ATENÇÃO: Nenhum caixa aberto, o recebimento não foi automaticamente registrado no caixa.';
+                $feedbackTipo = 'warning';
+            }
+        } else {
+            Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição principal para caixa NÃO MET. deveRegistrar: " . ($deveRegistrarNoCaixa ? 'S' : 'N') . ", novoValorCobrado: {$novoValorCobradoEfetivamente}, novaFormaPgto: " . ($novaFormaPagamento ?? 'NULA/VAZIA'));
+            if (in_array($novoStatusAposUpdate, $statusDePagamentoRecebido) && ($novoValorCobradoEfetivamente <= 0 || empty($novaFormaPagamento)) && $deveRegistrarNoCaixa) {
+                // Se deveria registrar (mudou para pago), mas os dados financeiros estão errados
+                $mensagemParaUsuario .= ' Para registrar este pagamento no caixa, o valor cobrado deve ser maior que zero e a forma de pagamento deve ser informada.';
+                $feedbackTipo = 'warning';
+            }
+        }
+        // ----- FIM DA LÓGICA DE REGISTRO NO CAIXA -----
+
+        // Lógica de notificação
+        if ($atendimento->status == 'Pronto para entrega' && $statusAnterior != 'Pronto para entrega') {
             if ($atendimento->cliente && $atendimento->cliente->email) {
                 try {
-                    $atendimento->cliente->notify(new AtendimentoProntoNotification($atendimento));
+                    if (class_exists(AtendimentoProntoNotification::class)) {
+                        $atendimento->cliente->notify(new AtendimentoProntoNotification($atendimento));
+                    } else {
+                        Log::warning("Classe de notificação AtendimentoProntoNotification não encontrada para atendimento ID: {$atendimento->id}");
+                    }
                 } catch (\Exception $e) {
                     Log::error("Erro ao enviar notificação 'Atendimento Pronto' para atendimento ID: {$atendimento->id} - Erro: " . $e->getMessage());
-                    // Considerar adicionar um flash message para o usuário sobre o erro de notificação, mas continuar com o sucesso da atualização.
                 }
             }
         }
 
-        return redirect()->route('atendimentos.show', $atendimento->id)
-        ->with('success', "Atendimento #{$atendimento->id} atualizado com sucesso!");
-    }
+        // Limpa a mensagem flash de warning_caixa para não persistir se não for mais necessária
+        session()->forget('warning_caixa');
 
+        return redirect()->route('atendimentos.show', $atendimento->id)
+            ->with($feedbackTipo, $mensagemParaUsuario);
+    }
 
     /**
      * Remove the specified resource from storage.
@@ -362,66 +490,131 @@ class AtendimentoController extends Controller
     {
         $request->validate([
             'status' => ['required', 'string', Rule::in(Atendimento::getPossibleStatuses())],
-        ], [], ['status' => 'novo status']); // Custom attribute name para mensagens de erro
+        ], [], ['status' => 'novo status']);
 
-        $statusAntigo = $atendimento->status;
+        $statusAnterior = $atendimento->status;
         $novoStatus = $request->input('status');
 
-        // Lógica de permissão para mudança de status
+        // --- Sua lógica de permissão para mudança de status ---
         $permitidoMudarStatus = false;
         $usuarioAtual = Auth::user();
-        // Adapte esta lógica de permissão conforme suas regras de negócio detalhadas
+        // Adapte esta lógica para $usuarioAtual->role se for o caso
         if ($usuarioAtual->tipo_usuario == 'admin') {
             $permitidoMudarStatus = true;
         } elseif ($usuarioAtual->tipo_usuario == 'tecnico') {
-            if (!in_array($novoStatus, ['Entregue', 'Cancelado'])) {
-                $permitidoMudarStatus = true;
-            } // Exemplo
-        } elseif ($usuarioAtual->tipo_usuario == 'atendente') {
-            if (in_array($novoStatus, ['Em diagnóstico', 'Pronto para entrega', 'Entregue'])) { // Exemplo
+            if (!in_array($novoStatus, ['Entregue', 'Cancelado', 'Finalizado e Pago', 'Pago'])) {
                 $permitidoMudarStatus = true;
             }
-            if (($statusAntigo == 'Pronto para entrega' || $statusAntigo == 'Em diagnóstico' || $statusAntigo == 'Aguardando peça' || $statusAntigo == 'Em manutenção') && $novoStatus == 'Entregue')
+        } elseif ($usuarioAtual->tipo_usuario == 'atendente') {
+            $transicoesAtendentePermitidas = [
+                'Em aberto' => ['Em diagnóstico', 'Cancelado'],
+                'Em diagnóstico' => ['Aguardando peça', 'Aguardando aprovação cliente', 'Em manutenção', 'Cancelado'],
+                'Aguardando peça' => ['Em manutenção', 'Cancelado', 'Pronto para entrega'],
+                'Aguardando aprovação cliente' => ['Em manutenção', 'Cancelado', 'Recusado pelo cliente'],
+                'Em manutenção' => ['Pronto para entrega', 'Aguardando peça', 'Cancelado'],
+                'Pronto para entrega' => ['Entregue', 'Pago', 'Finalizado e Pago', 'Cancelado'],
+            ];
+            if (isset($transicoesAtendentePermitidas[$statusAnterior]) && in_array($novoStatus, $transicoesAtendentePermitidas[$statusAnterior])) {
                 $permitidoMudarStatus = true;
-            if (($statusAntigo == 'Em diagnóstico' || $statusAntigo == 'Aguardando peça') && $novoStatus == 'Pronto para entrega')
+            }
+            if (Atendimento::getInitialStatuses() && in_array($novoStatus, Atendimento::getInitialStatuses())) {
                 $permitidoMudarStatus = true;
+            }
         }
 
         if (!$permitidoMudarStatus) {
-            if ($request->ajax()) {
-                return response()->json(['success' => false, 'message' => 'Você não tem permissão para alterar o status para: ' . $novoStatus], 403);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Você não tem permissão para alterar o status de "' . $statusAnterior . '" para: "' . $novoStatus . '"'], 403);
             }
             return redirect()->route('atendimentos.show', $atendimento->id)
-                ->with('error_status', 'Você não tem permissão para alterar para este status.');
+                ->with('error', 'Você não tem permissão para alterar para este status.');
         }
+        // --- Fim da lógica de permissão ---
 
         $atendimento->status = $novoStatus;
-        $atendimento->save();
+        $atendimento->save(); // Salva o novo status
 
-        if ($atendimento->status == 'Pronto para entrega' && $statusAntigo != 'Pronto para entrega') {
+        $mensagemParaUsuario = 'Status atualizado para ' . $novoStatus . '!';
+        $feedbackTipo = 'success';
+        $redirectToEditUrl = null;
+
+        $statusDePagamentoRecebido = Atendimento::getStatusDePagamento();
+
+        // Se o novo status é um de pagamento E o status anterior NÃO era de pagamento.
+        if (in_array($novoStatus, $statusDePagamentoRecebido) && !in_array($statusAnterior, $statusDePagamentoRecebido)) {
+            Log::info("[AtualizarStatus Rápido] Atendimento #{$atendimento->id}: Status mudou para '{$novoStatus}' (pagamento). Verificando dados financeiros.");
+
+            $valorCobradoEfetivamente = (float)($atendimento->valor_servico ?? 0) - (float)($atendimento->desconto_servico ?? 0);
+
+            if (!($valorCobradoEfetivamente > 0 && !empty($atendimento->forma_pagamento))) {
+                // Dados financeiros não estão preenchidos ou valor é zero
+                $mensagemParaUsuario .= ' Para registrar este pagamento no caixa, por favor, preencha o Valor do Serviço e a Forma de Pagamento.';
+                $feedbackTipo = 'info';
+                // Prepara para redirecionar para a página de edição completa
+                $redirectToEditUrl = route('atendimentos.edit', $atendimento->id);
+                Log::info("[AtualizarStatus Rápido] Atendimento #{$atendimento->id}: Dados financeiros incompletos. Sugerindo redirect para edição. Valor: {$valorCobradoEfetivamente}, FormaPgto: " . ($atendimento->forma_pagamento ?? 'NULA'));
+            } else {
+                // Dados financeiros JÁ ESTÃO OK no atendimento, então podemos tentar registrar no caixa
+                Log::info("[AtualizarStatus Rápido] Atendimento #{$atendimento->id}: Dados financeiros OK. Tentando registrar no caixa.");
+                $caixaAberto = Caixa::getCaixaAbertoAtual();
+                if ($caixaAberto) {
+                    MovimentacaoCaixa::create([
+                        'caixa_id' => $caixaAberto->id,
+                        'usuario_id' => Auth::id(),
+                        'tipo' => 'ENTRADA',
+                        'descricao' => "Recebimento OS/Atendimento #" . $atendimento->id,
+                        'valor' => $valorCobradoEfetivamente,
+                        'forma_pagamento' => $atendimento->forma_pagamento,
+                        'referencia_id' => $atendimento->id,
+                        'referencia_tipo' => Atendimento::class,
+                        'data_movimentacao' => Carbon::now(),
+                        'observacoes' => 'Pagamento (via atualização rápida de status).',
+                    ]);
+                    $mensagemParaUsuario .= ' Recebimento de R$ ' . number_format($valorCobradoEfetivamente, 2, ',', '.') . ' registrado no caixa #' . $caixaAberto->id . '.';
+                } else {
+                    $mensagemParaUsuario .= ' ATENÇÃO: Nenhum caixa aberto, o recebimento não foi registrado no caixa.';
+                    $feedbackTipo = 'warning';
+                }
+            }
+        }
+
+        // Lógica de notificação (seu código existente)
+        if ($atendimento->status == 'Pronto para entrega' && $statusAnterior != 'Pronto para entrega') {
             if ($atendimento->cliente && $atendimento->cliente->email) {
                 try {
-                    $atendimento->cliente->notify(new AtendimentoProntoNotification($atendimento));
+                    if (class_exists(AtendimentoProntoNotification::class)) {
+                        $atendimento->cliente->notify(new AtendimentoProntoNotification($atendimento));
+                    } else {
+                        Log::warning("Classe de notificação AtendimentoProntoNotification não encontrada (atualizarStatus) para atendimento ID: {$atendimento->id}");
+                    }
                 } catch (\Exception $e) {
                     Log::error("Erro ao enviar notificação 'Atendimento Pronto' (atualizarStatus) para atendimento ID: {$atendimento->id} - Erro: " . $e->getMessage());
                 }
             }
         }
 
-        if ($request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Status atualizado para ' . $novoStatus . '!',
+        if ($request->ajax() || $request->wantsJson()) {
+            $responseData = [
+                'success' => ($feedbackTipo !== 'danger'), // Sucesso se não for explicitamente um erro
+                'message' => $mensagemParaUsuario,
                 'novo_status' => $novoStatus,
                 'novo_status_classe_completa' => Atendimento::getStatusClass($novoStatus),
-                'novo_status_icon' => Atendimento::getStatusIcon($novoStatus), // Se você quiser atualizar o ícone também
-            ]);
+                'novo_status_icon' => Atendimento::getStatusIcon($novoStatus),
+                'feedback_tipo' => $feedbackTipo
+            ];
+            if ($redirectToEditUrl) {
+                $responseData['redirect_to_edit'] = $redirectToEditUrl;
+            }
+            return response()->json($responseData);
+        }
+
+        if ($redirectToEditUrl) {
+            return redirect($redirectToEditUrl)->with($feedbackTipo, $mensagemParaUsuario);
         }
 
         return redirect()->route('atendimentos.show', $atendimento->id)
-            ->with('success', 'Status do atendimento atualizado com sucesso!');
+            ->with($feedbackTipo, $mensagemParaUsuario);
     }
-
     /**
      * Atualiza um campo específico de um atendimento via AJAX (usado para edição inline).
      */
@@ -528,6 +721,7 @@ class AtendimentoController extends Controller
             return response()->json(['success' => false, 'message' => 'Erro interno ao salvar. Tente novamente.'], 500);
         }
     }
+
     public function atualizarValoresServicoAjax(Request $request, Atendimento $atendimento)
     {
         if (Gate::denies('is-admin')) {

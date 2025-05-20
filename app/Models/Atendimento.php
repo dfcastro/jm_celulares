@@ -22,7 +22,8 @@ class Atendimento extends Model
         'observacoes',
         'codigo_consulta',
         'laudo_tecnico',
-        'valor_servico',    // <<<<<<<<<<<<<< ADICIONADO
+        'valor_servico',
+        'forma_pagamento',   // <<<<<<<<<<<<<< ADICIONADO
         'desconto_servico', // <<<<<<<<<<<<<< ADICIONADO
     ];
 
@@ -48,36 +49,79 @@ class Atendimento extends Model
     {
         return $this->hasMany(SaidaEstoque::class);
     }
-    public static function getPossibleStatuses(): array
+    public static function getStatusDePagamento(): array
     {
-        return ['Em diagnóstico', 'Aguardando peça', 'Em manutenção', 'Pronto para entrega', 'Entregue', 'Cancelado', 'Reprovado'];
+        return ['Entregue', 'Finalizado e Pago', 'Pago']; // <<<< AJUSTE ESTA LISTA
     }
-    // Em app/Models/Atendimento.php
 
+    // Status que podem ser definidos na criação, por exemplo
+    public static function getInitialStatuses(): array
+    {
+        return ['Em aberto', 'Em diagnóstico'];
+    }
 
+    // Retorna a classe CSS para o badge do status
     public static function getStatusClass($status): string
     {
-        return match ($status) {
-            'Em diagnóstico' => 'bg-info text-dark',
-            'Aguardando peça' => 'bg-warning text-dark',
-            'Em manutenção' => 'bg-primary text-white', // Adicionei text-white para melhor contraste
-            'Pronto para entrega' => 'bg-success text-white',
-            'Entregue' => 'bg-secondary text-white',
-            'Cancelado', 'Reprovado' => 'bg-danger text-white',
-            default => 'bg-light text-dark',
-        };
+        switch ($status) {
+            case 'Entregue':
+            case 'Finalizado e Pago':
+            case 'Pago':
+                return 'bg-success';
+            case 'Em manutenção':
+            case 'Aguardando peça':
+            case 'Aguardando aprovação cliente':
+                return 'bg-warning text-dark';
+            case 'Pronto para entrega':
+                return 'bg-info text-dark';
+            case 'Cancelado':
+                return 'bg-danger';
+            case 'Em diagnóstico':
+                return 'bg-primary';
+            case 'Em aberto':
+            default:
+                return 'bg-secondary';
+        }
     }
 
+    // Retorna o ícone para o status
     public static function getStatusIcon($status): string
     {
-        return match ($status) {
-            'Em diagnóstico' => 'bi-search',
-            'Aguardando peça' => 'bi-hourglass-split',
-            'Em manutenção' => 'bi-gear-fill',
-            'Pronto para entrega' => 'bi-check-circle-fill',
-            'Entregue' => 'bi-box-arrow-in-right',
-            'Cancelado', 'Reprovado' => 'bi-x-octagon-fill',
-            default => 'bi-question-circle-fill',
-        };
+        switch ($status) {
+            case 'Entregue':
+            case 'Finalizado e Pago':
+            case 'Pago':
+                return 'bi-check-circle-fill';
+            case 'Em manutenção':
+                return 'bi-gear-fill';
+            case 'Aguardando peça':
+            case 'Aguardando aprovação cliente':
+                return 'bi-hourglass-split';
+            case 'Pronto para entrega':
+                return 'bi-box-seam-fill';
+            case 'Cancelado':
+                return 'bi-x-circle-fill';
+            case 'Em diagnóstico':
+                return 'bi-search';
+            case 'Em aberto':
+            default:
+                return 'bi-folder2-open';
+        }
+    }
+     public static function getPossibleStatuses(): array
+    {
+        return [
+            'Em aberto',
+            'Em diagnóstico',
+            'Aguardando peça',
+            'Aguardando aprovação cliente',
+            'Em manutenção',
+            'Pronto para entrega',
+            'Entregue',
+            'Cancelado',
+            'Pago',
+            'Finalizado e Pago',
+            // Adicione ou remova conforme sua necessidade
+        ];
     }
 }
