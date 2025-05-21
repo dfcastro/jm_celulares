@@ -84,7 +84,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/orcamentos/{orcamento}/converter-os', [OrcamentoController::class, 'converterEmOs'])
         ->name('orcamentos.converterEmOs'); //rota para converocamento em OS
     Route::post('/orcamentos/{orcamento}/enviar-email', [OrcamentoController::class, 'enviarEmail'])
-        ->name('orcamentos.enviarEmail');// Rota para Enviar E-mail do Orçamento
+        ->name('orcamentos.enviarEmail'); // Rota para Enviar E-mail do Orçamento
 
 
 
@@ -103,6 +103,7 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/atendimentos/{atendimento}/atualizar-valores-servico', [App\Http\Controllers\AtendimentoController::class, 'atualizarValoresServicoAjax'])
         ->name('atendimentos.atualizarValoresServicoAjax');
     // A rota de autocomplete de atendimentos está pública acima.
+    Route::post('/atendimentos/{atendimento}/registrar-pagamento-ajax', [AtendimentoController::class, 'registrarPagamentoAjax'])->name('atendimentos.registrarPagamentoAjax');
 
     // Rotas para Controle de Caixa
     Route::prefix('caixa')->name('caixa.')->group(function () {

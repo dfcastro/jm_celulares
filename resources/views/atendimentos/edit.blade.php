@@ -80,31 +80,28 @@
                     </div>
 
                     <div class="col-md-4 mb-3">
-                        <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
+                        <label for="status" class="form-label">Status do Serviço <span class="text-danger">*</span></label>
                         <select class="form-select @error('status') is-invalid @enderror" id="status" name="status" required>
-                            {{-- Adicionando uma lógica para restringir opções de status para não-admins, se necessário --}}
-                            @php
-                            $permitidoAlterarStatus = true; // True por padrão
-                            $usuarioAtual = Auth::user();
-                            $statusPermitidosAtendente = ['Em diagnóstico', 'Aguardando peça', 'Pronto para entrega', 'Entregue']; // Exemplo
-                            $statusPermitidosTecnico = ['Em diagnóstico', 'Aguardando peça', 'Em manutenção', 'Pronto para entrega']; // Exemplo
-
-                            if ($usuarioAtual->tipo_usuario == 'atendente' && !in_array($atendimento->status, $statusPermitidosAtendente) && $atendimento->status != old('status', $atendimento->status) ){
-                            // Se o status atual não é um que o atendente pode mudar e ele está tentando mudar.
-                            // Esta lógica é mais complexa e geralmente tratada no controller, mas pode-se desabilitar opções aqui.
-                            }
-                            @endphp
-                            <option value="Em diagnóstico" {{ old('status', $atendimento->status) == 'Em diagnóstico' ? 'selected' : '' }}>Em diagnóstico</option>
-                            <option value="Aguardando peça" {{ old('status', $atendimento->status) == 'Aguardando peça' ? 'selected' : '' }}>Aguardando peça</option>
-                            <option value="Em manutenção" {{ old('status', $atendimento->status) == 'Em manutenção' ? 'selected' : '' }}>Em manutenção</option>
-                            <option value="Pronto para entrega" {{ old('status', $atendimento->status) == 'Pronto para entrega' ? 'selected' : '' }}>Pronto para entrega</option>
-                            <option value="Entregue" {{ old('status', $atendimento->status) == 'Entregue' ? 'selected' : '' }}>Entregue</option>
-                            <option value="Entregue" {{ old('status', $atendimento->status) == 'Pago' ? 'selected' : '' }}>Pago</option>
-                            <option value="Entregue" {{ old('status', $atendimento->status) == 'Finalizado e Pago' ? 'selected' : '' }}>Finalizado e Pago</option>
-                            
-                            {{-- Adicionar outros status se existirem --}}
+                            @foreach (App\Models\Atendimento::getPossibleStatuses() as $s) {{-- Usa o método atualizado --}}
+                            <option value="{{ $s }}" {{ old('status', $atendimento->status) == $s ? 'selected' : '' }}>
+                                {{ $s }}
+                            </option>
+                            @endforeach
                         </select>
                         @error('status')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="status_pagamento" class="form-label">Status do Pagamento <span class="text-danger">*</span></label>
+                        <select class="form-select @error('status_pagamento') is-invalid @enderror" id="status_pagamento" name="status_pagamento" required>
+                            @foreach (App\Models\Atendimento::getPossiblePaymentStatuses() as $sp)
+                            <option value="{{ $sp }}" {{ old('status_pagamento', $atendimento->status_pagamento) == $sp ? 'selected' : '' }}>
+                                {{ $sp }}
+                            </option>
+                            @endforeach
+                        </select>
+                        @error('status_pagamento')
                         <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>

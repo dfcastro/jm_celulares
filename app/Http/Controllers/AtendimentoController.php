@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\Auth; // Importar Auth
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use App\Notifications\AtendimentoProntoNotification;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Facades\Validator; // NOVO: Importar o Facade Validator
+use Illuminate\Support\Facades\DB;
 // Removido: use Illuminate\Support\Facades\Notification; // Não é necessário aqui se usar $atendimento->cliente->notify(...)
 
 class AtendimentoController extends Controller
@@ -31,6 +32,7 @@ class AtendimentoController extends Controller
         if ($request->filled('filtro_status')) {
             $query->where('status', $request->input('filtro_status'));
         }
+
 
         if ($request->filled('filtro_tecnico_id')) {
             $filtroTecnicoId = $request->input('filtro_tecnico_id');
@@ -71,7 +73,10 @@ class AtendimentoController extends Controller
         if ($request->input('filtro_status_aberto') === 'sim') {
             $query->whereNotIn('status', ['Entregue', 'Cancelado', 'Reprovado']);
         }
-
+        //filtro para status de pagamento
+        if ($request->filled('filtro_status_pagamento')) {
+            $query->where('status_pagamento', $request->input('filtro_status_pagamento'));
+        }
 
         $atendimentos = $query->orderBy('data_entrada', 'desc')->paginate(15);
         $atendimentos->appends($request->query());
@@ -109,14 +114,16 @@ class AtendimentoController extends Controller
         $request->validate([
             'cliente_id' => 'required|exists:clientes,id',
             'descricao_aparelho' => 'required|string|max:255',
-            'problema_relatado' => 'required|string',
+            'problema_relatado' => 'required|string|max:255',
             'data_entrada' => 'required|date',
             'tecnico_id' => 'nullable|exists:users,id',
+            'status_pagamento' => ['nullable', 'string', Rule::in(Atendimento::getPossiblePaymentStatuses())],
         ], [
             'cliente_id.required' => 'O cliente é obrigatório. Por favor, selecione um cliente da lista ou cadastre um novo.',
             'descricao_aparelho.required' => 'A descrição do aparelho é obrigatória.',
             'problema_relatado.required' => 'O problema relatado é obrigatório.',
             'data_entrada.required' => 'A data de entrada é obrigatória.',
+            'status_pagamento.in' => 'O status de pagamento selecionado é inválido.'
         ]);
 
         $atendimentoData = $request->except('data_entrada');
@@ -140,9 +147,20 @@ class AtendimentoController extends Controller
             }
         }
         $atendimentoData['codigo_consulta'] = $novoCodigoConsulta;
-        $atendimentoData['status'] = 'Em diagnóstico'; // Status inicial padrão
+        $atendimentoData['status'] = 'Em diagnóstico'; // Status GERAL inicial padrão
 
-        $atendimento = Atendimento::create($atendimentoData);
+        // Define o status_pagamento inicial. Se não vier do form, usa o default do BD ('Pendente').
+        // Se vier do form e for válido, usa o valor do form.
+        if (!$request->filled('status_pagamento')) {
+            // Não precisa fazer nada aqui, o default do banco será 'Pendente'
+            // Mas se você quiser garantir que seja 'Pendente' via código:
+            // $atendimentoData['status_pagamento'] = 'Pendente';
+        } else {
+            $atendimentoData['status_pagamento'] = $request->input('status_pagamento');
+        }
+
+
+        $atendimento = Atendimento::create($atendimentoData); // Cria o atendimento com todos os dados
 
         return redirect()->route('atendimentos.show', $atendimento->id)
             ->with('success', "Atendimento #{$atendimento->id} registrado! Cód. Consulta: {$novoCodigoConsulta}");
@@ -185,9 +203,10 @@ class AtendimentoController extends Controller
         $validatedData = $request->validate([
             'cliente_id' => 'required|exists:clientes,id',
             'descricao_aparelho' => 'required|string|max:255',
-            'problema_relatado' => 'required|string',
+            'problema_relatado' => 'required|string|max:255',
             // 'data_entrada' geralmente não é editável após a criação.
             'status' => ['required', 'string', Rule::in(Atendimento::getPossibleStatuses())], // Garanta que Atendimento::getPossibleStatuses() exista e retorne um array de strings
+            'status_pagamento' => ['required', 'string', Rule::in(Atendimento::getPossiblePaymentStatuses())], // <<<< NOVO
             'tecnico_id' => 'nullable|exists:users,id',
             'data_conclusao' => [
                 'nullable',
@@ -227,11 +246,16 @@ class AtendimentoController extends Controller
                 // Certifique-se que estas opções são as mesmas do seu <select> no formulário
                 Rule::in(['Dinheiro', 'Cartão de Débito', 'Cartão de Crédito', 'PIX', 'Boleto', 'Outro', ''])
             ],
+        ], [
+            'status_pagamento.required' => 'O status do pagamento é obrigatório.',
+            'status_pagamento.in' => 'O status de pagamento selecionado é inválido.',
+            'forma_pagamento.required' => 'A forma de pagamento é obrigatória quando o status do pagamento é "Pago" e há valor a ser cobrado.',
         ]);
 
         // Captura valores ANTES do update para comparação posterior
         $statusAnterior = $atendimento->getOriginal('status');
-        $valorServicoAnterior = (float)$atendimento->getOriginal('valor_servico');
+        $statusPagamentoAnterior = $atendimento->getOriginal('status_pagamento'); // <<<< NOVO
+        $valorServicoAnterior = (float)($atendimento->getOriginal('valor_servico') ?? 0);
         $descontoAnterior = (float)($atendimento->getOriginal('desconto_servico') ?? 0);
         $formaPagamentoAnterior = $atendimento->getOriginal('forma_pagamento');
         $valorLiquidoAnterior = $valorServicoAnterior - $descontoAnterior;
@@ -291,85 +315,86 @@ class AtendimentoController extends Controller
         $mensagemParaUsuario = "Atendimento #{$atendimento->id} atualizado com sucesso!";
         $feedbackTipo = 'success'; // Tipo de feedback padrão
 
-        $novoStatusAposUpdate = $atendimento->status; // Status após o update
+        $novoStatusPagamentoAposUpdate = $atendimento->status_pagamento;
         $novoValorServico = (float)($atendimento->valor_servico ?? 0);
         $novoDesconto = (float)($atendimento->desconto_servico ?? 0);
         $novaFormaPagamento = $atendimento->forma_pagamento;
         $novoValorCobradoEfetivamente = $novoValorServico - $novoDesconto;
 
         $deveRegistrarNoCaixa = false;
+        $mensagemAdicionalCaixa = '';
 
-        Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Status Anterior: {$statusAnterior}, Novo Status: {$novoStatusAposUpdate}");
+        Log::info("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: Status Pgto Anterior: {$statusPagamentoAnterior}, Novo Status Pgto: {$novoStatusPagamentoAposUpdate}");
         Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Valor Liq. Anterior: {$valorLiquidoAnterior}, Novo Valor Liq.: {$novoValorCobradoEfetivamente}");
         Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Forma Pgto Anterior: {$formaPagamentoAnterior}, Nova Forma Pgto: {$novaFormaPagamento}");
 
         // Condição 1: Mudou de um status NÃO PAGO para um status PAGO nesta atualização
-        if (!in_array($statusAnterior, $statusDePagamentoRecebido) && in_array($novoStatusAposUpdate, $statusDePagamentoRecebido)) {
+        if ($statusPagamentoAnterior !== 'Pago' && $novoStatusPagamentoAposUpdate === 'Pago') {
             $deveRegistrarNoCaixa = true;
-            Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição 1 MET - Transição para status de pagamento.");
+            Log::info("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: CONDIÇÃO PRINCIPAL MET - status_pagamento mudou para 'Pago'.");
         }
-        // Condição 2: Já estava PAGO (e continua PAGO), mas o VALOR LÍQUIDO ou FORMA DE PAGAMENTO mudaram.
-        elseif (in_array($statusAnterior, $statusDePagamentoRecebido) && in_array($novoStatusAposUpdate, $statusDePagamentoRecebido)) {
+        // Condição Secundária: Já estava 'Pago' e continua 'Pago', mas os detalhes financeiros mudaram.
+        elseif ($statusPagamentoAnterior === 'Pago' && $novoStatusPagamentoAposUpdate === 'Pago') {
             if (bccomp((string)$novoValorCobradoEfetivamente, (string)$valorLiquidoAnterior, 2) != 0 || $novaFormaPagamento !== $formaPagamentoAnterior) {
-                // Verifica se já existe uma movimentação para este atendimento com os NOVOS valores
                 $movimentacaoExistenteComNovosValores = MovimentacaoCaixa::where('referencia_tipo', Atendimento::class)
                     ->where('referencia_id', $atendimento->id)
-                    ->where('valor', $novoValorCobradoEfetivamente) // Comparação exata do valor
-                    ->where('forma_pagamento', $novaFormaPagamento)   // Comparação exata da forma de pagamento
-                    ->latest('data_movimentacao') // Pega a mais recente, caso haja múltiplas por algum motivo
+                    ->where('valor', $novoValorCobradoEfetivamente)
+                    ->where('forma_pagamento', $novaFormaPagamento)
+                    ->latest('data_movimentacao')
                     ->first();
 
                 if (!$movimentacaoExistenteComNovosValores) {
                     $deveRegistrarNoCaixa = true;
-                    Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição 2 MET - Já estava pago, mas valor/forma mudou E NÃO existe mov. idêntica com os novos dados.");
-                    session()->flash('warning_caixa', 'Os detalhes financeiros do atendimento pago foram alterados. Uma nova movimentação de caixa será gerada. Verifique o caixa.');
+                    Log::info("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: CONDIÇÃO SECUNDÁRIA MET - Já estava 'Pago', valor/forma mudou E NÃO existe mov. idêntica com os novos dados.");
+                    session()->flash('warning_caixa_update', 'Os detalhes financeiros de um atendimento já pago foram alterados. Uma nova movimentação de caixa será gerada para refletir a alteração. Verifique o caixa.');
                 } else {
-                    Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição 2 NÃO MET - Já estava pago, valor/forma mudou, MAS JÁ EXISTE mov. idêntica com os novos dados.");
+                    Log::info("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: Condição Secundária NÃO MET - Já estava 'Pago', valor/forma mudou, MAS JÁ EXISTE mov. idêntica.");
                 }
             } else {
-                Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição 2 NÃO MET - Já estava pago, e valor/forma NÃO mudaram.");
+                Log::info("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: Condição Secundária NÃO MET - Já estava 'Pago', e valor/forma NÃO mudaram.");
             }
         }
 
-        if ($deveRegistrarNoCaixa && $novoValorCobradoEfetivamente > 0 && !empty($novaFormaPagamento)) {
-            Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condições financeiras OK para registrar (Valor: {$novoValorCobradoEfetivamente}, Forma: {$novaFormaPagamento}). Buscando caixa.");
-            $caixaAberto = Caixa::getCaixaAbertoAtual();
+        if ($deveRegistrarNoCaixa) {
+            if ($novoValorCobradoEfetivamente > 0 && !empty($novaFormaPagamento)) {
+                Log::info("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: Dados financeiros OK para registrar no caixa (Valor: {$novoValorCobradoEfetivamente}, Forma: {$novaFormaPagamento}).");
+                $caixaAberto = Caixa::getCaixaAbertoAtual();
 
-            if ($caixaAberto) {
-                Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Caixa Aberto #{$caixaAberto->id}. Registrando movimentação.");
-                MovimentacaoCaixa::create([
-                    'caixa_id' => $caixaAberto->id,
-                    'usuario_id' => Auth::id(),
-                    'tipo' => 'ENTRADA',
-                    'descricao' => "Recebimento OS/Atendimento #" . $atendimento->id,
-                    'valor' => $novoValorCobradoEfetivamente,
-                    'forma_pagamento' => $novaFormaPagamento,
-                    'referencia_id' => $atendimento->id,
-                    'referencia_tipo' => Atendimento::class,
-                    'data_movimentacao' => Carbon::now(),
-                    'observacoes' => 'Pagamento de serviço registrado pelo sistema (via Edição Completa).',
-                ]);
-                $mensagemAdicionalCaixa = ' Recebimento de R$ ' . number_format($novoValorCobradoEfetivamente, 2, ',', '.') . ' registrado no caixa #' . $caixaAberto->id . '.';
+                if ($caixaAberto) {
+                    // ... (mesma lógica de criação da MovimentacaoCaixa que você já tinha) ...
+                    MovimentacaoCaixa::create([
+                        'caixa_id' => $caixaAberto->id,
+                        'usuario_id' => Auth::id(),
+                        'tipo' => 'ENTRADA',
+                        'descricao' => "Recebimento OS/Atendimento #" . $atendimento->id,
+                        'valor' => $novoValorCobradoEfetivamente,
+                        'forma_pagamento' => $novaFormaPagamento,
+                        'referencia_id' => $atendimento->id,
+                        'referencia_tipo' => Atendimento::class,
+                        'data_movimentacao' => Carbon::now(),
+                        'observacoes' => 'Pagamento de serviço (via Edição Completa).',
+                    ]);
+                    $mensagemAdicionalCaixa = ' Recebimento de R$ ' . number_format($novoValorCobradoEfetivamente, 2, ',', '.') . ' registrado no caixa #' . $caixaAberto->id . '.';
 
-                if (session()->has('warning_caixa')) {
-                    $mensagemParaUsuario = session('warning_caixa') . $mensagemAdicionalCaixa;
-                    $feedbackTipo = 'warning'; // Mantém o warning se houve alteração de pagamento já pago
+                    if (session()->has('warning_caixa_update')) {
+                        $mensagemParaUsuario = session('warning_caixa_update') . $mensagemAdicionalCaixa;
+                        $feedbackTipo = 'warning';
+                    } else {
+                        $mensagemParaUsuario .= $mensagemAdicionalCaixa;
+                    }
+                    Log::info("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: Movimentação de R$ {$novoValorCobradoEfetivamente} registrada no caixa #{$caixaAberto->id}.");
                 } else {
-                    $mensagemParaUsuario .= $mensagemAdicionalCaixa;
-                    // $feedbackTipo já é 'success'
+                    Log::warning("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: Status Pagamento é 'Pago', mas caixa NÃO encontrado. Não registrou no caixa.");
+                    $mensagemParaUsuario .= ' ATENÇÃO: Nenhum caixa aberto, o recebimento não foi automaticamente registrado no caixa.';
+                    $feedbackTipo = 'warning';
                 }
-            } else {
-                Log::warning("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Caixa NÃO encontrado. Não registrou no caixa.");
-                $mensagemParaUsuario .= ' ATENÇÃO: Nenhum caixa aberto, o recebimento não foi automaticamente registrado no caixa.';
-                $feedbackTipo = 'warning';
+            } elseif ($novoStatusPagamentoAposUpdate === 'Pago') {
+                Log::warning("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: status_pagamento é 'Pago', mas valor é zero ou forma de pagamento não informada. Valor: {$novoValorCobradoEfetivamente}, FormaPgto: " . ($novaFormaPagamento ?? 'NULA/VAZIA'));
+                $mensagemParaUsuario .= ' Status de Pagamento definido como "Pago", mas o valor cobrado é zero ou a forma de pagamento não foi informada. Nenhuma entrada no caixa foi realizada.';
+                $feedbackTipo = 'info'; // Ou 'warning' dependendo da severidade que você quer dar
             }
         } else {
-            Log::info("[CAIXA UPDATE] Atendimento #{$atendimento->id}: Condição principal para caixa NÃO MET. deveRegistrar: " . ($deveRegistrarNoCaixa ? 'S' : 'N') . ", novoValorCobrado: {$novoValorCobradoEfetivamente}, novaFormaPgto: " . ($novaFormaPagamento ?? 'NULA/VAZIA'));
-            if (in_array($novoStatusAposUpdate, $statusDePagamentoRecebido) && ($novoValorCobradoEfetivamente <= 0 || empty($novaFormaPagamento)) && $deveRegistrarNoCaixa) {
-                // Se deveria registrar (mudou para pago), mas os dados financeiros estão errados
-                $mensagemParaUsuario .= ' Para registrar este pagamento no caixa, o valor cobrado deve ser maior que zero e a forma de pagamento deve ser informada.';
-                $feedbackTipo = 'warning';
-            }
+            Log::info("[CAIXA UPDATE EDICAO COMPLETA] Atendimento #{$atendimento->id}: Condição 'deveRegistrarNoCaixa' é FALSE. Nenhuma ação de caixa.");
         }
         // ----- FIM DA LÓGICA DE REGISTRO NO CAIXA -----
 
@@ -531,54 +556,24 @@ class AtendimentoController extends Controller
         }
         // --- Fim da lógica de permissão ---
 
-        $atendimento->status = $novoStatus;
-        $atendimento->save(); // Salva o novo status
+        $atendimento->status = $novoStatus; // Atualiza o status GERAL
+        $atendimento->save();
 
-        $mensagemParaUsuario = 'Status atualizado para ' . $novoStatus . '!';
+        $mensagemParaUsuario = 'Status geral atualizado para ' . $novoStatus . '!';
         $feedbackTipo = 'success';
-        $redirectToEditUrl = null;
+        // $redirectToEditUrl = null;
 
-        $statusDePagamentoRecebido = Atendimento::getStatusDePagamento();
-
-        // Se o novo status é um de pagamento E o status anterior NÃO era de pagamento.
-        if (in_array($novoStatus, $statusDePagamentoRecebido) && !in_array($statusAnterior, $statusDePagamentoRecebido)) {
-            Log::info("[AtualizarStatus Rápido] Atendimento #{$atendimento->id}: Status mudou para '{$novoStatus}' (pagamento). Verificando dados financeiros.");
-
-            $valorCobradoEfetivamente = (float)($atendimento->valor_servico ?? 0) - (float)($atendimento->desconto_servico ?? 0);
-
-            if (!($valorCobradoEfetivamente > 0 && !empty($atendimento->forma_pagamento))) {
-                // Dados financeiros não estão preenchidos ou valor é zero
-                $mensagemParaUsuario .= ' Para registrar este pagamento no caixa, por favor, preencha o Valor do Serviço e a Forma de Pagamento.';
-                $feedbackTipo = 'info';
-                // Prepara para redirecionar para a página de edição completa
-                $redirectToEditUrl = route('atendimentos.edit', $atendimento->id);
-                Log::info("[AtualizarStatus Rápido] Atendimento #{$atendimento->id}: Dados financeiros incompletos. Sugerindo redirect para edição. Valor: {$valorCobradoEfetivamente}, FormaPgto: " . ($atendimento->forma_pagamento ?? 'NULA'));
-            } else {
-                // Dados financeiros JÁ ESTÃO OK no atendimento, então podemos tentar registrar no caixa
-                Log::info("[AtualizarStatus Rápido] Atendimento #{$atendimento->id}: Dados financeiros OK. Tentando registrar no caixa.");
-                $caixaAberto = Caixa::getCaixaAbertoAtual();
-                if ($caixaAberto) {
-                    MovimentacaoCaixa::create([
-                        'caixa_id' => $caixaAberto->id,
-                        'usuario_id' => Auth::id(),
-                        'tipo' => 'ENTRADA',
-                        'descricao' => "Recebimento OS/Atendimento #" . $atendimento->id,
-                        'valor' => $valorCobradoEfetivamente,
-                        'forma_pagamento' => $atendimento->forma_pagamento,
-                        'referencia_id' => $atendimento->id,
-                        'referencia_tipo' => Atendimento::class,
-                        'data_movimentacao' => Carbon::now(),
-                        'observacoes' => 'Pagamento (via atualização rápida de status).',
-                    ]);
-                    $mensagemParaUsuario .= ' Recebimento de R$ ' . number_format($valorCobradoEfetivamente, 2, ',', '.') . ' registrado no caixa #' . $caixaAberto->id . '.';
-                } else {
-                    $mensagemParaUsuario .= ' ATENÇÃO: Nenhum caixa aberto, o recebimento não foi registrado no caixa.';
-                    $feedbackTipo = 'warning';
-                }
-            }
+        // Lógica de sugestão para edição completa se o status geral implica pagamento e o status de pagamento ainda está pendente.
+        if ($novoStatus === 'Pronto para entrega' && $atendimento->status_pagamento === 'Pendente') {
+            // MENSAGEM AJUSTADA: Instruir a usar o botão/modal de pagamento na própria tela show.
+            $mensagemParaUsuario .= ' Para registrar o recebimento e finalizar, utilize o botão "Registrar Pagamento" nesta tela.';
+            $feedbackTipo = 'info'; // Info é mais apropriado que warning aqui, pois é uma instrução.
+            // REMOVER: $redirectToEditUrl = route('atendimentos.edit', $atendimento->id);
+            Log::info("[AtualizarStatus Rápido] Atendimento #{$atendimento->id}: Status GERAL mudou para 'Pronto para entrega', status_pagamento é '{$atendimento->status_pagamento}'. Instruindo para usar modal de pagamento.");
         }
 
-        // Lógica de notificação (seu código existente)
+
+        // Lógica de notificação para "Pronto para entrega" (status GERAL)
         if ($atendimento->status == 'Pronto para entrega' && $statusAnterior != 'Pronto para entrega') {
             if ($atendimento->cliente && $atendimento->cliente->email) {
                 try {
@@ -595,22 +590,24 @@ class AtendimentoController extends Controller
 
         if ($request->ajax() || $request->wantsJson()) {
             $responseData = [
-                'success' => ($feedbackTipo !== 'danger'), // Sucesso se não for explicitamente um erro
+                'success' => ($feedbackTipo !== 'danger'),
                 'message' => $mensagemParaUsuario,
-                'novo_status' => $novoStatus,
-                'novo_status_classe_completa' => Atendimento::getStatusClass($novoStatus),
-                'novo_status_icon' => Atendimento::getStatusIcon($novoStatus),
+                'novo_status_geral' => $novoStatus,
+                'novo_status_geral_classe_completa' => Atendimento::getStatusClass($novoStatus),
+                'novo_status_geral_icon' => Atendimento::getStatusIcon($novoStatus),
                 'feedback_tipo' => $feedbackTipo
+                // REMOVER: 'redirect_to_edit' daqui, a menos que seja para outro cenário futuro.
             ];
-            if ($redirectToEditUrl) {
-                $responseData['redirect_to_edit'] = $redirectToEditUrl;
-            }
+            // if ($redirectToEditUrl) { // Esta condição não será mais atendida para o fluxo de "Pronto para entrega"
+            //     $responseData['redirect_to_edit'] = $redirectToEditUrl;
+            // }
             return response()->json($responseData);
         }
 
-        if ($redirectToEditUrl) {
-            return redirect($redirectToEditUrl)->with($feedbackTipo, $mensagemParaUsuario);
-        }
+        // REMOVER: Redirecionamento para edit a partir daqui para este caso específico
+        // if ($redirectToEditUrl) {
+        //     return redirect($redirectToEditUrl)->with($feedbackTipo, $mensagemParaUsuario);
+        // }
 
         return redirect()->route('atendimentos.show', $atendimento->id)
             ->with($feedbackTipo, $mensagemParaUsuario);
@@ -782,6 +779,169 @@ class AtendimentoController extends Controller
         } catch (\Exception $e) {
             Log::error("Erro ao atualizar valores do atendimento {$atendimento->id} via AJAX: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Erro interno ao salvar. Tente novamente.'], 500);
+        }
+    }
+    /**
+     * Registra o pagamento de um atendimento via AJAX a partir de um modal.
+     * Atualiza o status_pagamento para 'Pago', os valores financeiros e registra no caixa.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Atendimento  $atendimento
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function registrarPagamentoAjax(Request $request, Atendimento $atendimento)
+    {
+        if (Gate::denies('gerenciar-caixa')) { // Ou uma permissão mais específica
+            return response()->json(['success' => false, 'message' => 'Você não tem permissão para registrar pagamentos.'], 403);
+        }
+        // VERIFICAÇÃO ADICIONAL PARA OPÇÃO 1
+        $statusGeraisPermitemPagamento = ['Pronto para entrega', 'Aguardando aprovação cliente']; // Mesma lista da view
+        if (!in_array($atendimento->status, $statusGeraisPermitemPagamento)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Não é possível registrar o pagamento neste status atual do serviço (' . $atendimento->status . '). Avance o serviço primeiro.'
+            ], 400); // Bad Request
+        }
+
+        if (!in_array($atendimento->status_pagamento, ['Pendente', 'Parcialmente Pago'])) {
+            return response()->json(['success' => false, 'message' => 'O pagamento para este atendimento não está pendente ou já foi processado de outra forma.'], 400);
+        }
+
+        // Validação dos dados do modal
+        $validator = Validator::make($request->all(), [
+            'valor_servico' => ['required', 'numeric', 'min:0'], // Admin pode ajustar
+            'desconto_servico' => [
+                'required', // Mesmo que seja 0, é bom ter o campo
+                'numeric',
+                'min:0',
+                function ($attribute, $value, $fail) use ($request) {
+                    $valorServicoParaValidacao = $request->input('valor_servico', 0);
+                    if (floatval($value) > floatval($valorServicoParaValidacao)) {
+                        $fail('O desconto não pode ser maior que o valor do serviço.');
+                    }
+                }
+            ],
+            'forma_pagamento' => ['required', 'string', 'max:50', Rule::in(config('constants.formas_pagamento', ['Dinheiro', 'Cartão de Débito', 'Cartão de Crédito', 'PIX', 'Boleto', 'Outro']))], // Carregue as opções de forma consistente
+            'observacoes_pagamento' => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => 'Erro de validação.', 'errors' => $validator->errors()], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $valorServicoAntigo = (float) ($atendimento->valor_servico ?? 0);
+            $descontoServicoAntigo = (float) ($atendimento->desconto_servico ?? 0);
+
+            // Atualiza os dados financeiros do atendimento
+            $atendimento->valor_servico = (float) $request->input('valor_servico');
+            $atendimento->desconto_servico = (float) $request->input('desconto_servico');
+            $atendimento->forma_pagamento = $request->input('forma_pagamento');
+            $atendimento->status_pagamento = 'Pago'; // Define como Pago
+
+            // Adiciona observação do pagamento às observações gerais do atendimento
+            if ($request->filled('observacoes_pagamento')) {
+                $obsPagamento = "Pagamento Registrado (" . Carbon::now()->format('d/m/Y H:i') . "):\n" .
+                    $request->input('observacoes_pagamento') . "\n---";
+                $atendimento->observacoes = $atendimento->observacoes ? $atendimento->observacoes . "\n" . $obsPagamento : $obsPagamento;
+            }
+            $atendimento->save();
+
+            // Calcula o valor efetivamente cobrado
+            $valorCobradoEfetivamente = $atendimento->valor_servico - $atendimento->desconto_servico;
+
+            // Lógica de registro no caixa (apenas se houver valor)
+            $mensagemAdicionalCaixa = '';
+            if ($valorCobradoEfetivamente > 0) {
+                $caixaAberto = Caixa::getCaixaAbertoAtual();
+                if ($caixaAberto) {
+                    MovimentacaoCaixa::create([
+                        'caixa_id' => $caixaAberto->id,
+                        'usuario_id' => Auth::id(),
+                        'tipo' => 'ENTRADA',
+                        'descricao' => "Recebimento Atendimento #" . $atendimento->id,
+                        'valor' => $valorCobradoEfetivamente,
+                        'forma_pagamento' => $atendimento->forma_pagamento,
+                        'referencia_id' => $atendimento->id,
+                        'referencia_tipo' => Atendimento::class,
+                        'data_movimentacao' => Carbon::now(),
+                        'observacoes' => 'Pagamento de serviço (via modal). ' . ($request->input('observacoes_pagamento') ?? ''),
+                    ]);
+                    $mensagemAdicionalCaixa = ' Recebimento de R$ ' . number_format($valorCobradoEfetivamente, 2, ',', '.') . ' registrado no caixa #' . $caixaAberto->id . '.';
+                } else {
+                    $mensagemAdicionalCaixa = ' ATENÇÃO: Nenhum caixa aberto, o recebimento não foi registrado no caixa.';
+                    // Pode-se decidir se isso é um erro que impede o commit ou apenas um aviso.
+                    // Por segurança, se o caixa for crucial, talvez devesse impedir aqui.
+                    // DB::rollBack();
+                    // return response()->json(['success' => false, 'message' => 'Nenhum caixa aberto para registrar o pagamento.'], 400);
+                }
+            }
+
+            // Notificação de "Pronto para entrega" (se o status geral permitir e ainda não foi enviado)
+            if ($atendimento->status == 'Pronto para entrega') {
+                // Aqui você pode adicionar uma verificação para não reenviar a notificação se já foi enviada para este status.
+                // Ex: if (!$atendimento->notificacao_pronto_enviada) { ... $atendimento->notificacao_pronto_enviada = true; $atendimento->save(); }
+                if ($atendimento->cliente && $atendimento->cliente->email) {
+                    try {
+                        $atendimento->cliente->notify(new AtendimentoProntoNotification($atendimento));
+                    } catch (\Exception $e) {
+                        Log::error("Erro ao enviar notificação 'Pronto' (pagamento AJAX) para atend. #{$atendimento->id}: " . $e->getMessage());
+                    }
+                }
+            }
+
+            DB::commit();
+
+            // Prepara dados para atualizar a view dinamicamente
+            // RECARREGAR o atendimento com as relações necessárias para a resposta JSON
+            $atendimento->refresh(); // Atualiza o modelo com os dados do BD (incluindo o status_pagamento salvo)
+            $atendimento->load(['cliente', 'saidasEstoque.estoque']); // Garante que as relações estão carregadas
+
+            // Prepara dados para atualizar a view dinamicamente
+            $valorTotalPecasAtualizado = 0;
+            // Agora é seguro acessar saidasEstoque e estoque pois foram carregados
+            if ($atendimento->saidasEstoque && $atendimento->saidasEstoque->isNotEmpty()) {
+                foreach ($atendimento->saidasEstoque as $saida) {
+                    if ($saida->estoque) {
+                        $valorTotalPecasAtualizado += $saida->quantidade * ($saida->estoque->preco_venda ?? 0);
+                    }
+                }
+            }
+            $valorServicoLiquidoAtualizado = ($atendimento->valor_servico ?? 0) - ($atendimento->desconto_servico ?? 0);
+            $valorTotalAtendimentoAtualizado = $valorServicoLiquidoAtualizado + $valorTotalPecasAtualizado;
+
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pagamento registrado com sucesso!' . $mensagemAdicionalCaixa,
+                'novos_valores_atendimento' => [
+                    'valor_servico' => number_format($atendimento->valor_servico ?? 0, 2, ',', '.'),
+                    'desconto_servico' => number_format($atendimento->desconto_servico ?? 0, 2, ',', '.'),
+                    'subtotal_servico' => number_format($valorServicoLiquidoAtualizado, 2, ',', '.'),
+                    'valor_total_pecas' => number_format($valorTotalPecasAtualizado, 2, ',', '.'),
+                    'valor_total_atendimento' => number_format($valorTotalAtendimentoAtualizado, 2, ',', '.'),
+                ],
+                'novo_status_pagamento_html' => view('atendimentos.partials._status_pagamento_badge', ['status_pagamento' => $atendimento->status_pagamento])->render(),
+                'observacoes_atualizadas' => nl2br(e($atendimento->observacoes ?? '')), // Adicionado ?? '' para garantir string
+                'atendimento_id' => $atendimento->id
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            Log::error("Erro de VALIDAÇÃO ao registrar pagamento AJAX para Atendimento #{$atendimento->id}: ", $e->errors());
+            return response()->json(['success' => false, 'message' => 'Erro de validação ao registrar pagamento.', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro GERAL ao registrar pagamento AJAX para Atendimento #{$atendimento->id}: " . $e->getMessage());
+            return response()->json([
+                'success' => true,
+                'message' => 'Pagamento registrado com sucesso!' . $mensagemAdicionalCaixa,
+                'novos_valores_atendimento' => [ /* ... */],
+                'novo_status_pagamento_html' => view('atendimentos.partials._status_pagamento_badge', ['status_pagamento' => $atendimento->status_pagamento])->render(),
+                'novo_status_pagamento_texto' => $atendimento->status_pagamento, // <<<< ADICIONAR ESTA LINHA
+                'observacoes_atualizadas' => nl2br(e($atendimento->observacoes ?? '')),
+                'atendimento_id' => $atendimento->id
+            ]);
         }
     }
 }
