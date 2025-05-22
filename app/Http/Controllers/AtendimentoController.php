@@ -154,7 +154,7 @@ class AtendimentoController extends Controller
         if (!$request->filled('status_pagamento')) {
             // Não precisa fazer nada aqui, o default do banco será 'Pendente'
             // Mas se você quiser garantir que seja 'Pendente' via código:
-            // $atendimentoData['status_pagamento'] = 'Pendente';
+            $atendimentoData['status_pagamento'] = 'Pendente';
         } else {
             $atendimentoData['status_pagamento'] = $request->input('status_pagamento');
         }
@@ -171,8 +171,41 @@ class AtendimentoController extends Controller
      */
     public function show(Atendimento $atendimento)
     {
-        $atendimento->load('cliente', 'tecnico', 'saidasEstoque.estoque');
-        return view('atendimentos.show', compact('atendimento'));
+        $atendimento->load(['cliente', 'tecnico', 'saidasEstoque.estoque']);
+
+        // --- CÁLCULO CORRETO DO VALOR TOTAL DAS PEÇAS PARA O MODAL E EXIBIÇÃO ---
+        $valorTotalPecasModal = 0;
+        if ($atendimento->saidasEstoque && $atendimento->saidasEstoque->isNotEmpty()) {
+            foreach ($atendimento->saidasEstoque as $saida) {
+                if ($saida->estoque) { // Verifica se a relação estoque existe e não é null
+                    $valorTotalPecasModal += $saida->quantidade * ($saida->estoque->preco_venda ?? 0);
+                }
+            }
+        }
+        // --- FIM DO CÁLCULO ---
+
+        // Formas de pagamento para o modal (você já deve ter isso)
+        $formasPagamentoDisponiveis = config('constants.formas_pagamento', ['Dinheiro', 'Cartão de Débito', 'Cartão de Crédito', 'PIX', 'Boleto', 'Outro']);
+
+        // Outros valores que podem ser usados para inicializar o modal, se necessário
+        // Essas variáveis são usadas no @php dentro do modal na view.
+        // Passá-las aqui garante que estão definidas e com os valores mais atuais do atendimento.
+        $valorServicoModal = $atendimento->valor_servico ?? 0;
+        $descontoServicoModal = $atendimento->desconto_servico ?? 0;
+        $valorServicoLiquidoModal = $valorServicoModal - $descontoServicoModal;
+        $valorTotalDevidoModal = $valorServicoLiquidoModal + $valorTotalPecasModal; // Usa o $valorTotalPecasModal calculado acima
+
+
+        return view('atendimentos.show', compact(
+            'atendimento',
+            'formasPagamentoDisponiveis',
+            'valorTotalPecasModal',       // Passando o valor correto das peças
+            'valorServicoModal',
+            'descontoServicoModal',
+            'valorServicoLiquidoModal',
+            'valorTotalDevidoModal'
+        ));
+
     }
 
     /**
@@ -228,7 +261,7 @@ class AtendimentoController extends Controller
                 function ($attribute, $value, $fail) use ($request, $atendimento) {
                     // Pega o valor do serviço do request (se estiver sendo alterado) ou o valor original do atendimento.
                     $valorServicoParaValidacao = $request->input('valor_servico', $atendimento->getOriginal('valor_servico') ?? 0);
-                    if (is_numeric($value) && is_numeric($valorServicoParaValidacao) && (float)$value > (float)$valorServicoParaValidacao) {
+                    if (is_numeric($value) && is_numeric($valorServicoParaValidacao) && (float) $value > (float) $valorServicoParaValidacao) {
                         $fail('O desconto não pode ser maior que o valor do serviço.');
                     }
                 }
@@ -237,7 +270,7 @@ class AtendimentoController extends Controller
                 Rule::requiredIf(function () use ($request, $statusDePagamentoRecebido) {
                     $valorServico = $request->input('valor_servico', 0);
                     $descontoServico = $request->input('desconto_servico', 0);
-                    $valorCobrado = (float)$valorServico - (float)$descontoServico;
+                    $valorCobrado = (float) $valorServico - (float) $descontoServico;
                     return in_array($request->input('status'), $statusDePagamentoRecebido) && $valorCobrado > 0;
                 }),
                 'nullable', // Permite ser nulo se não for um status de pagamento ou se valor for zero
@@ -255,8 +288,8 @@ class AtendimentoController extends Controller
         // Captura valores ANTES do update para comparação posterior
         $statusAnterior = $atendimento->getOriginal('status');
         $statusPagamentoAnterior = $atendimento->getOriginal('status_pagamento'); // <<<< NOVO
-        $valorServicoAnterior = (float)($atendimento->getOriginal('valor_servico') ?? 0);
-        $descontoAnterior = (float)($atendimento->getOriginal('desconto_servico') ?? 0);
+        $valorServicoAnterior = (float) ($atendimento->getOriginal('valor_servico') ?? 0);
+        $descontoAnterior = (float) ($atendimento->getOriginal('desconto_servico') ?? 0);
         $formaPagamentoAnterior = $atendimento->getOriginal('forma_pagamento');
         $valorLiquidoAnterior = $valorServicoAnterior - $descontoAnterior;
 
@@ -267,8 +300,8 @@ class AtendimentoController extends Controller
             }
         }
 
-        $valorServicoMudou = $request->filled('valor_servico') && (float)$atendimento->getOriginal('valor_servico') != (float)$request->valor_servico;
-        $descontoServicoMudou = $request->filled('desconto_servico') && (float)($atendimento->getOriginal('desconto_servico') ?? 0) != (float)($request->desconto_servico ?? 0);
+        $valorServicoMudou = $request->filled('valor_servico') && (float) $atendimento->getOriginal('valor_servico') != (float) $request->valor_servico;
+        $descontoServicoMudou = $request->filled('desconto_servico') && (float) ($atendimento->getOriginal('desconto_servico') ?? 0) != (float) ($request->desconto_servico ?? 0);
 
         if (($valorServicoMudou || $descontoServicoMudou) && Gate::denies('is-admin')) {
             return redirect()->back()->withErrors(['valor_servico' => 'Você não tem permissão para alterar valores financeiros.'])->withInput();
@@ -316,8 +349,8 @@ class AtendimentoController extends Controller
         $feedbackTipo = 'success'; // Tipo de feedback padrão
 
         $novoStatusPagamentoAposUpdate = $atendimento->status_pagamento;
-        $novoValorServico = (float)($atendimento->valor_servico ?? 0);
-        $novoDesconto = (float)($atendimento->desconto_servico ?? 0);
+        $novoValorServico = (float) ($atendimento->valor_servico ?? 0);
+        $novoDesconto = (float) ($atendimento->desconto_servico ?? 0);
         $novaFormaPagamento = $atendimento->forma_pagamento;
         $novoValorCobradoEfetivamente = $novoValorServico - $novoDesconto;
 
@@ -335,7 +368,7 @@ class AtendimentoController extends Controller
         }
         // Condição Secundária: Já estava 'Pago' e continua 'Pago', mas os detalhes financeiros mudaram.
         elseif ($statusPagamentoAnterior === 'Pago' && $novoStatusPagamentoAposUpdate === 'Pago') {
-            if (bccomp((string)$novoValorCobradoEfetivamente, (string)$valorLiquidoAnterior, 2) != 0 || $novaFormaPagamento !== $formaPagamentoAnterior) {
+            if (bccomp((string) $novoValorCobradoEfetivamente, (string) $valorLiquidoAnterior, 2) != 0 || $novaFormaPagamento !== $formaPagamentoAnterior) {
                 $movimentacaoExistenteComNovosValores = MovimentacaoCaixa::where('referencia_tipo', Atendimento::class)
                     ->where('referencia_id', $atendimento->id)
                     ->where('valor', $novoValorCobradoEfetivamente)
@@ -911,7 +944,8 @@ class AtendimentoController extends Controller
             $valorServicoLiquidoAtualizado = ($atendimento->valor_servico ?? 0) - ($atendimento->desconto_servico ?? 0);
             $valorTotalAtendimentoAtualizado = $valorServicoLiquidoAtualizado + $valorTotalPecasAtualizado;
 
-
+            $htmlBadge = view('atendimentos.partials._status_pagamento_badge', ['status_pagamento' => $atendimento->status_pagamento])->render();
+            Log::info("HTML do Badge Gerado para AJAX: " . $htmlBadge); // VERIFIQUE ESTE LOG
             return response()->json([
                 'success' => true,
                 'message' => 'Pagamento registrado com sucesso!' . $mensagemAdicionalCaixa,
@@ -922,7 +956,9 @@ class AtendimentoController extends Controller
                     'valor_total_pecas' => number_format($valorTotalPecasAtualizado, 2, ',', '.'),
                     'valor_total_atendimento' => number_format($valorTotalAtendimentoAtualizado, 2, ',', '.'),
                 ],
-                'novo_status_pagamento_html' => view('atendimentos.partials._status_pagamento_badge', ['status_pagamento' => $atendimento->status_pagamento])->render(),
+                'novo_status_pagamento_html' => $htmlBadge,
+                'novo_status_pagamento_texto' => $atendimento->status_pagamento,
+                //  'novo_status_pagamento_html' => view('atendimentos.partials._status_pagamento_badge', ['status_pagamento' => $atendimento->status_pagamento])->render(),
                 'observacoes_atualizadas' => nl2br(e($atendimento->observacoes ?? '')), // Adicionado ?? '' para garantir string
                 'atendimento_id' => $atendimento->id
             ]);
