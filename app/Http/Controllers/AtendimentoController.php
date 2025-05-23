@@ -3,21 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Models\Atendimento;
-use App\Models\Cliente;
-use App\Models\MovimentacaoCaixa;
-use App\Models\Caixa;
-use App\Models\User;
+use App\Models\Cliente; // Certifique-se que está importado
+use App\Models\User;    // Certifique-se que está importado
+use App\Models\Estoque; // <<<< ADICIONAR IMPORTAÇÃO
+use App\Models\SaidaEstoque; // <<<< ADICIONAR IMPORTAÇÃO
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
-use Barryvdh\DomPDF\Facade\Pdf;
+use Barryvdh\DomPDF\Facade\Pdf; // Certifique-se que está importado
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Auth; // Importar Auth
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
-use App\Notifications\AtendimentoProntoNotification;
-use Illuminate\Support\Facades\Validator; // NOVO: Importar o Facade Validator
-use Illuminate\Support\Facades\DB;
+use App\Notifications\AtendimentoProntoNotification; // Certifique-se que está importado
+use SimpleSoftwareIO\QrCode\Facades\QrCode; // Certifique-se que está importado
+use Illuminate\Support\Facades\DB; // <<<< ADICIONAR IMPORTAÇÃO PARA TRANSAÇÕES
+use App\Models\Caixa; // Adicionado para lógica de caixa
+use App\Models\MovimentacaoCaixa; // Adicionado para lógica de caixa
+use Illuminate\Support\Facades\Validator; // Adicionado para lógica de caixa
 // Removido: use Illuminate\Support\Facades\Notification; // Não é necessário aqui se usar $atendimento->cliente->notify(...)
 
 class AtendimentoController extends Controller
@@ -455,16 +458,84 @@ class AtendimentoController extends Controller
 
     /**
      * Remove the specified resource from storage.
+     *
+     * @param  \App\Models\Atendimento  $atendimento
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function destroy(Atendimento $atendimento)
     {
-        if (Gate::denies('is-admin-or-atendente')) {
-            return redirect()->route('atendimentos.index')->with('error', 'Acesso não autorizado para excluir atendimentos.');
+        // 1. Verificar permissão (apenas admin pode excluir com estorno, por exemplo)
+        //    Você pode ajustar este Gate conforme sua necessidade.
+        if (Gate::denies('is-admin')) {
+            return redirect()->route('atendimentos.index')
+                ->with('error', 'Apenas administradores podem excluir atendimentos.');
         }
-        // As saídas de estoque vinculadas terão 'atendimento_id' setado para null devido ao ->nullable() na FK
-        $atendimento->delete();
-        return redirect()->route('atendimentos.index')->with('success', 'Atendimento excluído com sucesso!');
+
+        // 2. Bloquear exclusão se o status de pagamento for 'Pago' ou status geral for 'Entregue'
+        //    Estes casos exigiriam um fluxo de estorno mais complexo que não estamos implementando aqui.
+        if ($atendimento->status_pagamento === 'Pago' || $atendimento->status === 'Entregue' || $atendimento->status === 'Finalizado e Pago') {
+            Log::warning("Tentativa de exclusão bloqueada para Atendimento #{$atendimento->id} devido ao status: {$atendimento->status} / status_pagamento: {$atendimento->status_pagamento}.");
+            return redirect()->route('atendimentos.show', $atendimento->id)
+                ->with('error', 'Atendimentos pagos ou já entregues não podem ser excluídos diretamente. Avalie um processo de estorno ou cancelamento apropriado com o administrador.');
+        }
+
+        // Se chegou aqui, a exclusão é permitida (ex: status Cancelado, Reprovado, ou em andamento sem pagamento)
+        // Vamos estornar as peças se houver.
+
+        DB::beginTransaction();
+        try {
+            $atendimentoIdExcluido = $atendimento->id;
+            $nomeCliente = $atendimento->cliente->nome_completo ?? 'N/A';
+            $pecasEstornadasInfo = [];
+
+            // Estornar peças ao estoque
+            // É importante carregar as relações se não estiverem já carregadas
+            $atendimento->loadMissing('saidasEstoque.estoque');
+
+            if ($atendimento->saidasEstoque->isNotEmpty()) {
+                Log::info("Iniciando estorno de peças para Atendimento #{$atendimentoIdExcluido}. Peças a serem processadas: " . $atendimento->saidasEstoque->count());
+                foreach ($atendimento->saidasEstoque as $saida) {
+                    if ($saida->estoque) { // Verifica se a peça ainda existe no estoque
+                        $peca = $saida->estoque;
+                        $quantidadeEstornada = $saida->quantidade;
+
+                        $peca->increment('quantidade', $quantidadeEstornada);
+                        $pecasEstornadasInfo[] = "{$quantidadeEstornada}x {$peca->nome} (ID Estoque: {$peca->id})";
+                        Log::info("Estornado: {$quantidadeEstornada}x {$peca->nome} (ID Estoque: {$peca->id}) para Atendimento #{$atendimentoIdExcluido}");
+
+                        // Excluir o registro da SaidaEstoque
+                        // Isso desvincula a peça do atendimento que será excluído.
+                        $saida->delete();
+                    } else {
+                        Log::warning("Peça da SaidaEstoque ID {$saida->id} não encontrada no estoque durante a exclusão do Atendimento #{$atendimentoIdExcluido}. A saída será removida, mas o estoque não pôde ser incrementado.");
+                        // Decida se quer apenas logar ou impedir a exclusão do atendimento se uma peça não for encontrada.
+                        // Por segurança, podemos continuar e apenas logar.
+                        $saida->delete(); // Remove a saída órfã
+                    }
+                }
+            }
+
+            // Excluir o próprio atendimento
+            $atendimento->delete();
+            Log::info("Atendimento #{$atendimentoIdExcluido} para cliente '{$nomeCliente}' excluído com sucesso.");
+
+            DB::commit();
+
+            $mensagem = "Atendimento #{$atendimentoIdExcluido} (Cliente: {$nomeCliente}) excluído com sucesso.";
+            if (!empty($pecasEstornadasInfo)) {
+                $mensagem .= " Peças estornadas ao estoque: " . implode('; ', $pecasEstornadasInfo) . ".";
+            }
+
+            return redirect()->route('atendimentos.index')->with('success', $mensagem);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro crítico ao excluir atendimento #{$atendimento->id} com estorno de peças: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->route('atendimentos.index')
+                ->with('error', 'Ocorreu um erro crítico ao tentar excluir o atendimento e estornar as peças. Consulte os logs para mais detalhes.');
+        }
     }
+
 
     /**
      * Autocomplete para atendimentos.
@@ -980,4 +1051,5 @@ class AtendimentoController extends Controller
             ]);
         }
     }
+
 }

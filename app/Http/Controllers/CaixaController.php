@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Caixa;
-use App\Models\MovimentacaoCaixa; // Adicionar esta linha
+use App\Models\MovimentacaoCaixa;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth; // Para pegar o usuário logado
-use Illuminate\Support\Facades\Gate; // Para permissões
-use Carbon\Carbon; // Para manipular datas/horas
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log; //
 // Dentro de app/Http/Controllers/CaixaController.php
 
 class CaixaController extends Controller
@@ -215,6 +218,120 @@ class CaixaController extends Controller
                 ->with('error', 'Erro ao registrar a movimentação. Tente novamente.')
                 ->withInput();
         }
+    }
+    /**
+     * Processa o fechamento de um caixa.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Caixa  $caixa  // Route Model Binding
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function fechar(Request $request, Caixa $caixa)
+    {
+        // 1. Verificar permissão
+        if (Gate::denies('gerenciar-caixa')) {
+            return redirect()->route('caixa.show', $caixa->id)->with('error', 'Você não tem permissão para fechar este caixa.');
+        }
+
+        // 2. Verificar se o caixa está realmente aberto (o objeto $caixa já está carregado pelo Route Model Binding)
+        if (!$caixa->estaAberto()) {
+            return redirect()->route('caixa.show', $caixa->id)->with('error', 'Este caixa não está aberto ou já foi fechado. Não pode ser fechado novamente.');
+        }
+
+        // 3. Validar os dados do formulário
+        $validatedData = $request->validate([
+            'saldo_final_informado' => 'required|numeric|min:0',
+            'observacoes_fechamento' => 'nullable|string|max:1000',
+        ], [
+            'saldo_final_informado.required' => 'O saldo final contado é obrigatório.',
+            'saldo_final_informado.numeric' => 'O saldo final contado deve ser um valor numérico.',
+            'saldo_final_informado.min' => 'O saldo final contado não pode ser negativo.',
+        ]);
+
+        // Iniciar uma transação de banco de dados para garantir a atomicidade
+        DB::beginTransaction();
+        try {
+            // 4. Recalcular o saldo final do sistema NO MOMENTO DO FECHAMENTO
+            // Bloquear o caixa para escrita pode ser uma boa ideia aqui se o seu SGBD suportar LOCK FOR UPDATE
+            // $caixaLocked = Caixa::lockForUpdate()->find($caixa->id); // Opcional, para alta concorrência
+
+            $totalEntradas = $caixa->movimentacoes()->where('tipo', 'ENTRADA')->sum('valor');
+            $totalSaidas = $caixa->movimentacoes()->where('tipo', 'SAIDA')->sum('valor');
+            // O saldo_inicial já é a primeira movimentação de ENTRADA,
+            // então o cálculo direto de entradas - saídas reflete o saldo final.
+            $saldoFinalCalculadoSistema = $totalEntradas - $totalSaidas;
+
+            // 5. Calcular a diferença
+            $saldoFinalInformadoUsuario = (float) $validatedData['saldo_final_informado'];
+            // A diferença é o que o usuário contou MENOS o que o sistema calculou.
+            // Se positivo: sobrou dinheiro. Se negativo: faltou dinheiro.
+            $diferenca = $saldoFinalInformadoUsuario - $saldoFinalCalculadoSistema;
+
+            // 6. Atualizar o registro do caixa
+            $caixa->usuario_fechamento_id = Auth::id();
+            $caixa->data_fechamento = Carbon::now();
+            $caixa->saldo_final_calculado = $saldoFinalCalculadoSistema;
+            $caixa->saldo_final_informado = $saldoFinalInformadoUsuario;
+            $caixa->diferenca = $diferenca;
+            $caixa->status = 'Fechado';
+            $caixa->observacoes_fechamento = $validatedData['observacoes_fechamento'];
+
+            $caixa->save();
+
+            DB::commit(); // Confirma as alterações no banco
+
+            $mensagemFeedback = 'Caixa #' . $caixa->id . ' fechado com sucesso!';
+            $tipoFeedback = 'success';
+
+            if (bccomp((string) $diferenca, '0.00', 2) != 0) { // Compara números decimais com precisão
+                $tipoDiferenca = $diferenca > 0 ? "SOBRA" : "FALTA";
+                $mensagemFeedback .= " Atenção: Diferença de R$ " . number_format(abs($diferenca), 2, ',', '.') . " ({$tipoDiferenca}).";
+                $tipoFeedback = 'warning'; // Muda para warning para destacar a diferença
+            }
+
+            return redirect()->route('caixa.show', $caixa->id)->with($tipoFeedback, $mensagemFeedback);
+
+        } catch (ValidationException $e) {
+            DB::rollBack(); // Reverte a transação em caso de erro de validação (embora já validado acima)
+            return redirect()->back()->withErrors($e->errors())->withInput();
+        } catch (\Exception $e) {
+            DB::rollBack(); // Reverte a transação em caso de qualquer outro erro
+            Log::error("Erro crítico ao fechar o caixa #{$caixa->id}: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->route('caixa.show', $caixa->id)->with('error', 'Ocorreu um erro crítico ao tentar fechar o caixa. Por favor, tente novamente ou contate o suporte. Detalhes: ' . $e->getMessage());
+        }
+    }
+    /**
+     * Mostra o formulário para fechar um caixa específico.
+     *
+     * @param  \App\Models\Caixa  $caixa // Route Model Binding
+     * @return \Illuminate\Http\RedirectResponse|\Illuminate\View\View
+     */
+    public function editFechar(Caixa $caixa)
+    {
+        // 1. Verificar permissão
+        if (Gate::denies('gerenciar-caixa')) {
+            return redirect()->route('caixa.show', $caixa->id)->with('error', 'Você não tem permissão para fechar este caixa.');
+        }
+
+        // 2. Verificar se o caixa está realmente aberto
+        // O objeto $caixa já é carregado pelo Route Model Binding.
+        // O método estaAberto() deve existir no seu Model Caixa.
+        if (!$caixa->estaAberto()) {
+            return redirect()->route('caixa.show', $caixa->id)->with('error', 'Este caixa não está aberto ou já foi fechado.');
+        }
+
+        // 3. Calcular o saldo final com base nas movimentações
+        $totalEntradas = $caixa->movimentacoes()->where('tipo', 'ENTRADA')->sum('valor');
+        $totalSaidas = $caixa->movimentacoes()->where('tipo', 'SAIDA')->sum('valor');
+
+        // O saldo_final_calculado é o saldo_inicial + (todas as outras entradas) - (todas as saídas)
+        // Como o saldo_inicial já está incluído no $totalEntradas (como a primeira movimentação),
+        // a fórmula simplifica para:
+        $saldoFinalCalculado = $totalEntradas - $totalSaidas;
+
+        // 4. Passar o caixa e o saldo calculado para a view
+        // Esta view nós criamos na mensagem anterior.
+        return view('caixa.editFechar', compact('caixa', 'saldoFinalCalculado'));
     }
     // ...
 }

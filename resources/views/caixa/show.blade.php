@@ -111,9 +111,9 @@
                             <i class="bi bi-dash-circle me-1"></i> Registrar Sangria/Saída
                         </a>
                         {{-- O botão de fechar caixa virá depois --}}
-                        {{-- <a href="{{ route('caixa.editFechar', $caixa->id) }}" class="btn btn-danger">
+                         <a href="{{ route('caixa.editFechar', $caixa->id) }}" class="btn btn-danger">
                             <i class="bi bi-lock me-1"></i> Fechar Caixa
-                        </a> --}}
+                        </a> 
                        
 
                     @elseif (!$caixa->estaAberto())
