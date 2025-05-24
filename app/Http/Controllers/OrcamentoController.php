@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Orcamento;
 use App\Models\OrcamentoItem;
+use App\Models\AtendimentoServico;
 use App\Models\Cliente;
 use App\Models\Estoque;
 use App\Models\User;
@@ -19,6 +20,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use App\Notifications\OrcamentoParaClienteNotification; // Importar a nova notificação
 use Illuminate\Support\Facades\Notification; // Para enviar a notificação
+use Illuminate\Support\Facades\Gate;
 
 class OrcamentoController extends Controller
 {
@@ -504,14 +506,28 @@ class OrcamentoController extends Controller
 
     public function aprovarOrcamento(Request $request, Orcamento $orcamento)
     {
-        if ($orcamento->status !== 'Aguardando Aprovação') {
+        $usuarioLogado = Auth::user();
+
+        // Usar o Gate que define quem pode manipular orçamentos neste nível
+        // Ex: 'gerenciar-orcamentos' ou um mais específico como 'aprovar-orcamento'
+        // Por agora, vamos usar um exemplo genérico:
+        if (Gate::denies('is-admin-or-atendente')) { // Apenas Admin ou Atendente podem registrar aprovação
             return redirect()->route('orcamentos.show', $orcamento->id)
-                ->with('error', 'Apenas orçamentos "Aguardando Aprovação" podem ser aprovados.');
+                ->with('error', 'Você não tem permissão para aprovar este orçamento.');
         }
+
+        // Usar o método do Model para verificar se a transição é permitida
+        if (!$orcamento->canTransitionTo('Aprovado', $usuarioLogado)) {
+            return redirect()->route('orcamentos.show', $orcamento->id)
+                ->with('error', 'Este orçamento não pode ser aprovado a partir do status atual (' . $orcamento->status . ') ou você não tem permissão para esta transição específica.');
+        }
+
+        // Se chegou aqui, a transição é permitida
         $orcamento->status = 'Aprovado';
         $orcamento->data_aprovacao = Carbon::now();
-        $orcamento->aprovado_por_id = Auth::id();
+        $orcamento->aprovado_por_id = $usuarioLogado->id;
         $orcamento->save();
+
         return redirect()->route('orcamentos.show', $orcamento->id)
             ->with('success', 'Orçamento aprovado com sucesso!');
     }
@@ -531,14 +547,11 @@ class OrcamentoController extends Controller
 
     public function converterEmOs(Request $request, Orcamento $orcamento)
     {
-        Log::info("OrcamentoController@converterEmOs: Entrando para Orçamento ID {$orcamento->id}");
-        Log::info(" - Status do Orçamento: {$orcamento->status}");
-        Log::info(" - Cliente ID do Orçamento: " . ($orcamento->cliente_id ?? 'NULO'));
-        Log::info(" - Sessão 'orcamento_edit_cliente_id' ANTES da lógica: " . (session()->get('orcamento_edit_cliente_id') ?? 'NULO'));
+        Log::info("OrcamentoController@converterEmOs: Iniciando conversão para Orçamento ID {$orcamento->id}");
 
-
+        // Validações iniciais (status, cliente_id, etc.)
         if ($orcamento->status !== 'Aprovado') {
-            Log::warning(" - Bloqueado: Status não é 'Aprovado'.");
+            Log::warning(" - Bloqueado: Status não é 'Aprovado'. Status atual: {$orcamento->status}");
             return redirect()->route('orcamentos.show', $orcamento->id)
                 ->with('error', 'Apenas orçamentos com status "Aprovado" podem ser convertidos.');
         }
@@ -547,47 +560,41 @@ class OrcamentoController extends Controller
             return redirect()->route('atendimentos.show', $orcamento->atendimento_id_convertido)
                 ->with('info', 'Este orçamento já foi convertido na OS #' . $orcamento->atendimento_id_convertido);
         }
-
-        // Não limpa a flag aqui, deixa o 'update' ou o sucesso da conversão limpar.
-        // session()->forget('orcamento_edit_cliente_id');
+        if (!$orcamento->cliente_id) {
+            // DB::rollBack(); // Não há transação DB iniciada neste ponto ainda.
+            session()->put('orcamento_edit_cliente_id', $orcamento->id);
+            Log::warning(" - Bloqueado: Cliente ID nulo. Setando flag 'orcamento_edit_cliente_id' para {$orcamento->id} e redirecionando para edit.");
+            return redirect()->route('orcamentos.edit', $orcamento->id)
+                ->with('error', 'Para converter em OS, associe este orçamento a um cliente cadastrado.');
+        }
 
         DB::beginTransaction();
         try {
             $novoAtendimento = new Atendimento();
-
-            if ($orcamento->cliente_id) {
-                $novoAtendimento->cliente_id = $orcamento->cliente_id;
-                Log::info(" - Cliente ID {$orcamento->cliente_id} USADO para nova OS.");
-            } else {
-                DB::rollBack();
-                session()->put('orcamento_edit_cliente_id', $orcamento->id); // Seta a flag
-                Log::warning(" - Bloqueado: Cliente ID nulo. Setando flag 'orcamento_edit_cliente_id' para {$orcamento->id} e redirecionando para edit.");
-                return redirect()->route('orcamentos.edit', $orcamento->id)
-                    ->with('error', 'Para converter em OS, associe este orçamento a um cliente cadastrado.');
-            }
-
+            $novoAtendimento->cliente_id = $orcamento->cliente_id;
             $novoAtendimento->descricao_aparelho = $orcamento->descricao_aparelho;
-            $problemaRelatadoOS = "Problema conforme orçamento #" . $orcamento->id . ":\n" . $orcamento->problema_relatado_cliente;
-            $descricaoServicosOrcados = "";
-            foreach ($orcamento->itens as $item) {
-                if ($item->tipo_item == 'servico') {
-                    $descricaoServicosOrcados .= "- " . $item->descricao_item_manual . " (Qtd: " . $item->quantidade . ")\n";
-                }
-            }
-            if (!empty($descricaoServicosOrcados)) {
-                $problemaRelatadoOS .= "\n\nServiços Orçados:\n" . trim($descricaoServicosOrcados);
-            }
-            $novoAtendimento->problema_relatado = $problemaRelatadoOS;
-            $novoAtendimento->data_entrada = Carbon::now();
-            $novoAtendimento->status = 'Em diagnóstico';
-            $novoAtendimento->tecnico_id = $orcamento->criado_por_id ?? Auth::id();
-            $novoAtendimento->valor_servico = $orcamento->valor_total_servicos; // Valor dos serviços do orçamento
-            // Se o orçamento teve um desconto FIXO, podemos aplicar esse desconto ao valor do serviço da OS
-            // Se foi PERCENTUAL, o valor_total_servicos já deveria refletir isso, ou o valor_final do orçamento é o que manda.
-            // Vamos assumir que valor_total_servicos já é o valor a ser cobrado pelos serviços.
-            // O desconto_servico da OS pode ser para descontos ADICIONAIS na OS.
-            $novoAtendimento->desconto_servico = 0; // Inicialmente zero, pode ser ajustado na OS se necessário
+            $novoAtendimento->problema_relatado = "Problema relatado no orçamento #" . $orcamento->id . ":\n" . $orcamento->problema_relatado_cliente;
 
+            // Laudo técnico inicial pode ser uma referência ao orçamento ou observações gerais
+            // Os serviços detalhados irão para a tabela 'atendimento_servicos'
+            $novoAtendimento->laudo_tecnico = "Serviços e peças conforme Orçamento #" . $orcamento->id . ".";
+            if(!empty($orcamento->observacoes_internas)){ // Adiciona observações internas do orçamento, se houver
+                 $novoAtendimento->observacoes = "Observações do Orçamento #".$orcamento->id.":\n".$orcamento->observacoes_internas;
+            }
+
+
+            $novoAtendimento->data_entrada = Carbon::now();
+            $novoAtendimento->status = 'Em diagnóstico'; // Ou 'Aguardando peça' ou 'Em manutenção' dependendo do fluxo
+            $novoAtendimento->tecnico_id = $orcamento->criado_por_id ?? Auth::id();
+
+            // O valor_servico do Atendimento será a SOMA dos AtendimentoServico.
+            // O desconto_servico do Atendimento será o desconto GLOBAL da OS.
+            // Estes serão calculados e atualizados após criar os AtendimentoServico.
+            $novoAtendimento->valor_servico = 0; // Inicializa, será recalculado
+            $novoAtendimento->desconto_servico = 0; // Desconto da OS inicia zerado
+            $novoAtendimento->status_pagamento = 'Pendente';
+
+            // Gerar código de consulta único para a OS
             $anoAtual = now()->year;
             $codigoUnicoOs = false;
             $novoCodigoConsultaOs = '';
@@ -599,16 +606,20 @@ class OrcamentoController extends Controller
                 }
             }
             $novoAtendimento->codigo_consulta = $novoCodigoConsultaOs;
-            $novoAtendimento->save();
-            Log::info(" - Nova OS #{$novoAtendimento->id} criada.");
+            $novoAtendimento->save(); // Salva o Atendimento principal para obter o ID
+            Log::info(" - Nova OS #{$novoAtendimento->id} criada com sucesso. Código Consulta OS: {$novoAtendimento->codigo_consulta}.");
 
+            $totalServicosCalculadoParaOS = 0;
+
+            // Iterar sobre os itens do orçamento para criar SaidasEstoque (para peças)
+            // E AtendimentoServico (para serviços)
             foreach ($orcamento->itens as $itemOrcado) {
                 if ($itemOrcado->tipo_item == 'peca' && $itemOrcado->estoque_id) {
                     $pecaEstoque = Estoque::find($itemOrcado->estoque_id);
                     if ($pecaEstoque) {
                         if ($pecaEstoque->quantidade < $itemOrcado->quantidade) {
                             DB::rollBack();
-                            Log::error(" - Erro de estoque para peça {$pecaEstoque->nome} (ID: {$pecaEstoque->id}) na conversão do Orçamento #{$orcamento->id}.");
+                            Log::error(" - Erro de estoque para peça '{$pecaEstoque->nome}' (ID Estoque: {$pecaEstoque->id}) na conversão do Orçamento #{$orcamento->id}. Disponível: {$pecaEstoque->quantidade}, Solicitado: {$itemOrcado->quantidade}.");
                             return redirect()->route('orcamentos.show', $orcamento->id)
                                 ->with('error', "Estoque insuficiente para a peça '{$pecaEstoque->nome}'. Disponível: {$pecaEstoque->quantidade}, Solicitado: {$itemOrcado->quantidade}.");
                         }
@@ -617,32 +628,103 @@ class OrcamentoController extends Controller
                             'atendimento_id' => $novoAtendimento->id,
                             'quantidade' => $itemOrcado->quantidade,
                             'data_saida' => Carbon::now(),
-                            'observacoes' => 'Saída do orçamento #' . $orcamento->id . ' para OS #' . $novoAtendimento->id,
+                            'observacoes' => 'Saída automática via conversão do orçamento #' . $orcamento->id . ' para OS #' . $novoAtendimento->id,
                         ]);
                         $pecaEstoque->decrement('quantidade', $itemOrcado->quantidade);
-                        Log::info(" - Saída de {$itemOrcado->quantidade} unidade(s) da peça {$pecaEstoque->nome} (ID: {$pecaEstoque->id}) para OS #{$novoAtendimento->id}.");
+                        Log::info(" - Saída de estoque de {$itemOrcado->quantidade} unidade(s) da peça '{$pecaEstoque->nome}' (ID Estoque: {$pecaEstoque->id}) registrada para OS #{$novoAtendimento->id}.");
                     } else {
+                        // Tratar erro: peça do orçamento não encontrada no estoque
                         DB::rollBack();
-                        Log::error(" - Peça ID {$itemOrcado->estoque_id} (do orçamento #{$orcamento->id}) não encontrada no estoque durante conversão.");
+                        Log::error(" - Peça com ID Estoque {$itemOrcado->estoque_id} (do orçamento #{$orcamento->id}) não encontrada no estoque durante a conversão para OS.");
                         return redirect()->route('orcamentos.show', $orcamento->id)
-                            ->with('error', "Peça ID {$itemOrcado->estoque_id} (do orçamento) não encontrada no estoque.");
+                            ->with('error', "Peça ID {$itemOrcado->estoque_id} (listada no orçamento) não foi encontrada no estoque. Verifique o cadastro da peça.");
+                    }
+                } elseif ($itemOrcado->tipo_item == 'servico') {
+                    // ***** AQUI CRIAMOS O AtendimentoServico *****
+                    $subtotalServicoItem = (float)$itemOrcado->quantidade * (float)$itemOrcado->valor_unitario;
+                    AtendimentoServico::create([
+                        'atendimento_id' => $novoAtendimento->id,
+                        'descricao_servico' => $itemOrcado->descricao_item_manual,
+                        'quantidade' => $itemOrcado->quantidade,
+                        'valor_unitario' => $itemOrcado->valor_unitario,
+                        'subtotal_servico' => $subtotalServicoItem,
+                    ]);
+                    $totalServicosCalculadoParaOS += $subtotalServicoItem;
+                    Log::info(" - Serviço Detalhado '{$itemOrcado->descricao_item_manual}' adicionado à OS #{$novoAtendimento->id}. Valor: {$subtotalServicoItem}");
+                }
+            }
+
+            // Atualizar o campo valor_servico do Atendimento principal com a soma dos serviços detalhados
+            // Se houver um desconto GERAL no orçamento, precisamos decidir como aplicá-lo.
+            // Opção 1: O valor_servico da OS já é líquido de descontos do orçamento.
+            // Opção 2: O valor_servico da OS é a soma bruta, e o desconto_servico da OS reflete o desconto proporcional.
+            // A última versão do método usava:
+            // $valorMaoDeObraOS = $orcamento->valor_final - $orcamento->valor_total_pecas;
+            // $novoAtendimento->valor_servico = max(0, $valorMaoDeObraOS);
+            // $novoAtendimento->desconto_servico = 0;
+
+            // Agora, com $totalServicosCalculadoParaOS (soma dos itens de serviço do orçamento):
+            $novoAtendimento->valor_servico = $totalServicosCalculadoParaOS;
+
+            // Como aplicar o desconto do orçamento?
+            // Se o orçamento tinha um desconto que afetava o valor_final,
+            // e $valor_final = (servicos_brutos + pecas_brutas) - desconto_orcamento
+            // E o valor_servico da OS agora é a soma dos servicos_brutos do orçamento,
+            // precisamos aplicar um desconto_servico na OS se o desconto do orçamento era para serviços.
+            // Para simplificar por agora: se o valor_final do orçamento é menor que (soma_servicos_orc + soma_pecas_orc),
+            // a diferença é o desconto total do orçamento.
+            $subtotalBrutoOrcamento = $orcamento->valor_total_servicos + $orcamento->valor_total_pecas;
+            $descontoTotalNoOrcamento = $subtotalBrutoOrcamento - $orcamento->valor_final;
+
+            if ($descontoTotalNoOrcamento > 0 && $orcamento->valor_total_servicos > 0) {
+                // Se o desconto no orçamento era apenas sobre serviços (ou proporcionalmente)
+                // E o orçamento tinha apenas serviços, o desconto é totalmente para os serviços.
+                if ($orcamento->valor_total_pecas == 0) {
+                     $novoAtendimento->desconto_servico = $descontoTotalNoOrcamento;
+                } else if ($orcamento->valor_total_servicos > 0) {
+                    // Se havia peças e serviços, e queremos aplicar o desconto proporcionalmente
+                    // apenas aos serviços da OS.
+                    // Essa parte pode ser complexa. Uma forma mais simples é se o `valor_total_servicos` do orçamento já era líquido.
+                    // Vamos assumir por ora que o `valor_total_servicos` do ORÇAMENTO era o valor bruto dos serviços,
+                    // e o `desconto_valor` do ORÇAMENTO era o desconto A SER APLICADO.
+
+                    if ($orcamento->desconto_tipo && $orcamento->desconto_valor > 0) {
+                        if ($orcamento->desconto_tipo == 'fixo') {
+                            // Se o desconto fixo do orçamento for menor ou igual ao total dos serviços da OS
+                            if ($orcamento->desconto_valor <= $totalServicosCalculadoParaOS) {
+                                $novoAtendimento->desconto_servico = $orcamento->desconto_valor;
+                            } else {
+                                // Se o desconto fixo era maior que os serviços, aplica o máximo possível
+                                $novoAtendimento->desconto_servico = $totalServicosCalculadoParaOS;
+                                // A diferença deveria ter sido aplicada às peças, o que não é comum.
+                                // Log::warning("Desconto fixo do orçamento #{$orcamento->id} era maior que o total de serviços. Aplicado parcialmente à OS #{$novoAtendimento->id}.");
+                            }
+                        } elseif ($orcamento->desconto_tipo == 'percentual') {
+                            $novoAtendimento->desconto_servico = ($totalServicosCalculadoParaOS * $orcamento->desconto_valor) / 100;
+                        }
                     }
                 }
             }
+            $novoAtendimento->valor_servico = round($novoAtendimento->valor_servico, 2);
+            $novoAtendimento->desconto_servico = round($novoAtendimento->desconto_servico ?? 0, 2);
+            $novoAtendimento->save(); // Salva o valor_servico e desconto_servico atualizados na OS
+
+            // Atualizar o status do orçamento
             $orcamento->status = 'Convertido em OS';
             $orcamento->atendimento_id_convertido = $novoAtendimento->id;
             $orcamento->save();
-            Log::info(" - Orçamento #{$orcamento->id} atualizado para 'Convertido em OS', vinculado à OS #{$novoAtendimento->id}.");
+            Log::info(" - Orçamento #{$orcamento->id} atualizado para 'Convertido em OS' e vinculado à OS #{$novoAtendimento->id}.");
 
             DB::commit();
-            Log::info(" - Transação commitada para conversão do Orçamento #{$orcamento->id}.");
-            session()->forget('orcamento_edit_cliente_id'); // Limpa a flag, pois a conversão foi bem sucedida
+            Log::info(" - Transação commitada. Conversão do Orçamento #{$orcamento->id} para OS #{$novoAtendimento->id} concluída com sucesso.");
+            session()->forget('orcamento_edit_cliente_id');
 
             return redirect()->route('atendimentos.show', $novoAtendimento->id)
-                ->with('success', 'Orçamento #' . $orcamento->id . ' convertido com sucesso na OS #' . $novoAtendimento->id . '! Código OS: ' . $novoAtendimento->codigo_consulta);
+                ->with('success', 'Orçamento #' . $orcamento->id . ' convertido com sucesso na OS #' . $novoAtendimento->id . '! Código da OS: ' . $novoAtendimento->codigo_consulta);
+
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erro CRÍTICO ao converter orçamento em OS: ' . $e->getMessage(), ['orcamento_id' => $orcamento->id, 'exception' => $e]);
+            Log::error("Erro CRÍTICO ao converter orçamento #{$orcamento->id} em OS: " . $e->getMessage() . " no arquivo " . $e->getFile() . " linha " . $e->getLine(), ['exception_trace' => $e->getTraceAsString()]);
             return redirect()->route('orcamentos.show', $orcamento->id)
                 ->with('error', 'Ocorreu um erro crítico ao converter o orçamento: ' . $e->getMessage());
         }

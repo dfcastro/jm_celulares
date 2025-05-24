@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon; // Adicionado para consistência
 
 class Atendimento extends Model
 {
@@ -15,8 +17,8 @@ class Atendimento extends Model
         'descricao_aparelho',
         'problema_relatado',
         'data_entrada',
-        'status',           // Status do serviço/reparo
-        'status_pagamento', // Status financeiro
+        'status',
+        'status_pagamento',
         'tecnico_id',
         'data_conclusao',
         'observacoes',
@@ -34,6 +36,7 @@ class Atendimento extends Model
         'desconto_servico' => 'decimal:2',
     ];
 
+    // Relacionamentos (cliente, tecnico, saidasEstoque) como antes...
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);
@@ -48,78 +51,153 @@ class Atendimento extends Model
     {
         return $this->hasMany(SaidaEstoque::class);
     }
-
-    /**
-     * Retorna os status GERAIS possíveis para um atendimento (foco no progresso técnico).
-     * @return array
+      /**
+     * Define o relacionamento com os serviços detalhados deste atendimento.
      */
+    public function servicosDetalhados(): HasMany // <<<< NOVO RELACIONAMENTO
+    {
+        return $this->hasMany(AtendimentoServico::class);
+    }
+
+    // Métodos de status (getPossibleStatuses, getAllowedStatusTransitions, etc.) como antes...
     public static function getPossibleStatuses(): array
     {
         return [
-            'Em aberto',                 // Novo, aguardando triagem inicial
-            'Em diagnóstico',            // Técnico está analisando
-            'Aguardando aprovação cliente', // Orçamento enviado, aguardando OK do cliente para prosseguir
-            'Aguardando peça',           // Peça necessária pedida/em trânsito
-            'Em manutenção',             // Reparo em andamento
-            'Pronto para entrega', 
-            'Entregue',      // Serviço concluído, aguardando retirada/pagamento
-            'Cancelado',                 // Pelo cliente ou pela loja antes da conclusão
-            'Reprovado',                 // Cliente não aprovou o orçamento/serviço
-            // 'Entregue' foi removido daqui - será controlado pela combinação de status e status_pagamento.
-            // 'Pago' e 'Finalizado e Pago' foram removidos daqui.
+            'Em aberto',
+            'Em diagnóstico',
+            'Aguardando aprovação cliente',
+            'Aguardando peça',
+            'Em manutenção',
+            'Pronto para entrega',
+            'Entregue',
+            'Cancelado',
+            'Reprovado',
         ];
     }
 
-    /**
-     * Retorna os status INICIAIS possíveis para um atendimento.
-     * @return array
-     */
     public static function getInitialStatuses(): array
     {
         return ['Em aberto', 'Em diagnóstico'];
     }
 
-    /**
-     * Retorna a classe CSS para o badge do status GERAL.
-     * @param string|null $status
-     * @return string
-     */
+    public static function getAllowedStatusTransitions(User $user = null): array
+    {
+        $currentUser = $user ?: Auth::user();
+        $transitions = [
+            'Em aberto' => ['Em diagnóstico', 'Cancelado'],
+            'Em diagnóstico' => ['Aguardando aprovação cliente', 'Aguardando peça', 'Em manutenção', 'Pronto para entrega', 'Cancelado', 'Reprovado'],
+            'Aguardando aprovação cliente' => ['Em manutenção', 'Aguardando peça', 'Pronto para entrega', 'Reprovado', 'Cancelado'],
+            'Aguardando peça' => ['Em manutenção', 'Pronto para entrega', 'Cancelado'],
+            'Em manutenção' => ['Pronto para entrega', 'Aguardando peça', 'Cancelado'],
+            'Pronto para entrega' => ['Entregue', 'Cancelado'],
+            'Entregue' => [],
+            'Cancelado' => [],
+            'Reprovado' => [],
+        ];
+
+        if ($currentUser && $currentUser->tipo_usuario === 'admin') {
+            $transitions['Entregue'] = array_merge($transitions['Entregue'], ['Pronto para entrega']);
+            $transitions['Cancelado'] = array_merge($transitions['Cancelado'], ['Em aberto', 'Em diagnóstico']);
+            $transitions['Reprovado'] = array_merge($transitions['Reprovado'], ['Aguardando aprovação cliente']);
+        } elseif ($currentUser && $currentUser->tipo_usuario === 'tecnico') {
+            unset($transitions['Em diagnóstico'][array_search('Entregue', $transitions['Em diagnóstico'] ?? [])]);
+            unset($transitions['Aguardando aprovação cliente'][array_search('Entregue', $transitions['Aguardando aprovação cliente'] ?? [])]);
+            unset($transitions['Aguardando peça'][array_search('Entregue', $transitions['Aguardando peça'] ?? [])]);
+            unset($transitions['Em manutenção'][array_search('Entregue', $transitions['Em manutenção'] ?? [])]);
+            unset($transitions['Pronto para entrega'][array_search('Cancelado', $transitions['Pronto para entrega'] ?? [])]);
+        } elseif ($currentUser && $currentUser->tipo_usuario === 'atendente') {
+            $transitions['Em aberto'] = ['Em diagnóstico', 'Cancelado'];
+            $transitions['Em diagnóstico'] = ['Aguardando aprovação cliente', 'Cancelado'];
+            $transitions['Aguardando aprovação cliente'] = ['Em manutenção', 'Reprovado', 'Cancelado'];
+            $transitions['Pronto para entrega'] = ['Entregue'];
+            $transitions['Aguardando peça'] = [];
+            $transitions['Em manutenção'] = [];
+        }
+        return $transitions;
+    }
+
+    public function canTransitionTo(string $newStatus, User $user = null): bool
+    {
+        $currentUser = $user ?: Auth::user();
+        if (!$currentUser) {
+            return false;
+        }
+        $allowedTransitions = self::getAllowedStatusTransitions($currentUser);
+        $currentStatus = $this->status;
+        return isset($allowedTransitions[$currentStatus]) && in_array($newStatus, $allowedTransitions[$currentStatus]);
+    }
+
+    public static function getAllowedPaymentStatusTransitions(Atendimento $atendimento, User $user = null): array
+    {
+        $currentUser = $user ?: Auth::user();
+        $transitions = [
+            'Pendente' => ['Pago', 'Parcialmente Pago', 'Cancelado', 'Não Aplicável'],
+            'Parcialmente Pago' => ['Pago', 'Devolvido', 'Cancelado'],
+            'Pago' => ['Devolvido'],
+            'Não Aplicável' => [],
+            'Devolvido' => [],
+            'Cancelado' => [],
+        ];
+        if ($currentUser && $currentUser->tipo_usuario === 'admin') {
+            $transitions['Pago'] = array_merge($transitions['Pago'], ['Pendente']);
+            $transitions['Devolvido'] = array_merge($transitions['Devolvido'], ['Pendente', 'Pago']);
+            $transitions['Cancelado'] = array_merge($transitions['Cancelado'], ['Pendente']);
+        }
+        if (in_array($atendimento->status, ['Cancelado', 'Reprovado'])) {
+            if ($atendimento->status_pagamento === 'Pendente' || $atendimento->status_pagamento === 'Parcialmente Pago') {
+                $transitions[$atendimento->status_pagamento] = ['Cancelado', 'Não Aplicável'];
+            } elseif ($atendimento->status_pagamento === 'Pago') {
+                $transitions['Pago'] = ['Devolvido'];
+            } else {
+                $transitions[$atendimento->status_pagamento] = [];
+            }
+        }
+        return $transitions;
+    }
+
+    public function canTransitionPaymentTo(string $newPaymentStatus, User $user = null): bool
+    {
+        $currentUser = $user ?: Auth::user();
+        if (!$currentUser) {
+            return false;
+        }
+        $allowedTransitions = self::getAllowedPaymentStatusTransitions($this, $currentUser);
+        $currentPaymentStatus = $this->status_pagamento ?? 'Pendente';
+        return isset($allowedTransitions[$currentPaymentStatus]) && in_array($newPaymentStatus, $allowedTransitions[$currentPaymentStatus]);
+    }
+
     public static function getStatusClass(?string $status): string
     {
         switch ($status) {
             case 'Entregue':
             case 'Pronto para entrega':
-                return 'bg-success'; // Verde, pois o serviço está pronto.
+                return 'bg-success';
             case 'Em manutenção':
             case 'Aguardando aprovação cliente':
-                return 'bg-primary'; // Azul para em progresso ou aguardando ação externa
+                return 'bg-primary';
             case 'Aguardando peça':
-                return 'bg-warning text-dark'; // Amarelo para pendências de peças
+                return 'bg-warning text-dark';
             case 'Cancelado':
             case 'Reprovado':
                 return 'bg-danger';
             case 'Em diagnóstico':
-                return 'bg-info text-dark'; // Ciano para diagnóstico
+                return 'bg-info text-dark';
             case 'Em aberto':
             default:
                 return 'bg-secondary';
         }
     }
 
-    /**
-     * Retorna o ícone para o status GERAL.
-     * @param string|null $status
-     * @return string
-     */
     public static function getStatusIcon(?string $status): string
     {
         switch ($status) {
             case 'Pronto para entrega':
-                return 'bi-check2-circle'; // Ícone de pronto
+            case 'Entregue':
+                return 'bi-check2-circle';
             case 'Em manutenção':
                 return 'bi-gear-fill';
             case 'Aguardando aprovação cliente':
-                 return 'bi-person-check';
+                return 'bi-person-check';
             case 'Aguardando peça':
                 return 'bi-hourglass-split';
             case 'Cancelado':
@@ -132,9 +210,6 @@ class Atendimento extends Model
                 return 'bi-folder2-open';
         }
     }
-
-
-    // ---- MÉTODOS PARA STATUS DE PAGAMENTO (permanecem os mesmos) ----
 
     public static function getPossiblePaymentStatuses(): array
     {
@@ -156,14 +231,14 @@ class Atendimento extends Model
             case 'Parcialmente Pago':
                 return 'bg-info text-dark';
             case 'Devolvido':
-                return 'bg-secondary'; // Pode ser ajustado, talvez um laranja claro
+                return 'bg-secondary';
             case 'Pendente':
                 return 'bg-warning text-dark';
             case 'Cancelado':
                 return 'bg-danger';
             case 'Não Aplicável':
             default:
-                return 'bg-light text-dark border'; // Um cinza claro com borda
+                return 'bg-light text-dark border';
         }
     }
 
@@ -177,14 +252,38 @@ class Atendimento extends Model
             case 'Pendente':
                 return 'bi-hourglass-bottom';
             case 'Cancelado':
-                return 'bi-x-octagon-fill'; // Um X mais forte
+                return 'bi-x-octagon-fill';
             case 'Devolvido':
-                return 'bi-arrow-left-circle-fill'; // Ícone de retorno
+                return 'bi-arrow-left-circle-fill';
             case 'Não Aplicável':
             default:
                 return 'bi-question-circle';
         }
     }
+
+    // --- Assessors para valores calculados ---
+    public function getValorServicoLiquidoAttribute(): float
+    {
+        return (float) ($this->valor_servico ?? 0) - (float) ($this->desconto_servico ?? 0);
+    }
+
+    public function getValorTotalPecasAttribute(): float
+    {
+        // Garante que a relação está carregada para evitar N+1 queries se usado em loop
+        if (!$this->relationLoaded('saidasEstoque')) {
+            $this->load('saidasEstoque.estoque');
+        }
+
+        return $this->saidasEstoque->sum(function ($saida) {
+            return $saida->quantidade * (float) ($saida->estoque->preco_venda ?? 0);
+        });
+    }
+
+    public function getValorTotalAtendimentoAttribute(): float
+    {
+        return $this->valor_servico_liquido + $this->valor_total_pecas;
+    }
+    // --- Fim dos Assessors ---
 
     public function isTotalmentePago(): bool
     {
@@ -196,41 +295,39 @@ class Atendimento extends Model
         return $this->status_pagamento === 'Pendente';
     }
 
-    /**
-     * Determina se o atendimento pode ser considerado "Entregue ao Cliente".
-     * Um atendimento é considerado entregue se o serviço está pronto E o pagamento foi realizado (ou não é aplicável).
-     * Você pode ajustar essa lógica conforme a regra de negócio.
-     * @return bool
-     */
-    public function podeSerConsideradoEntregue(): bool
+    public function isAbertoOuEmAndamento(): bool
     {
-        $servicoPronto = $this->status === 'Pronto para entrega';
-        $pagamentoOk = $this->status_pagamento === 'Pago' || $this->status_pagamento === 'Não Aplicável';
-
-        // Um exemplo de regra: para ser entregue, o serviço deve estar "Pronto para entrega" E
-        // o status de pagamento deve ser "Pago" OU "Não Aplicável".
-        return $servicoPronto && $pagamentoOk;
+        return in_array($this->status, [
+            'Em aberto',
+            'Em diagnóstico',
+            'Aguardando aprovação cliente',
+            'Aguardando peça',
+            'Em manutenção',
+        ]);
     }
 
-    /**
-     * Define se o atendimento está efetivamente finalizado e pode sair da lista de pendentes.
-     * Poderia ser, por exemplo, quando o status GERAL é "Pronto para entrega" E o status de PAGAMENTO é "Pago"
-     * OU quando o status GERAL é "Cancelado" ou "Reprovado".
-     * A lógica exata depende do seu fluxo.
-     * @return bool
-     */
-    public function isFinalizadoParaLista(): bool
+    public function podeSerConsideradoEntregue(): bool
     {
-        if (in_array($this->status, ['Cancelado', 'Reprovado'])) {
+        if ($this->status === 'Entregue') {
             return true;
         }
-        // Considera finalizado se está pronto e pago, ou pronto e não aplicável pagamento
-        if ($this->status === 'Pronto para entrega' && ($this->status_pagamento === 'Pago' || $this->status_pagamento === 'Não Aplicável')) {
+        if (
+            $this->status === 'Pronto para entrega' &&
+            in_array($this->status_pagamento, ['Pago', 'Não Aplicável'])
+        ) {
             return true;
         }
-        // Adicione outras condições se necessário.
-        // Por exemplo, se você tiver um status geral como "Entregue Fisicamente", ele também seria finalizado.
         return false;
     }
 
+    public function isFinalizadoParaLista(): bool
+    {
+        if (in_array($this->status, ['Entregue', 'Cancelado', 'Reprovado'])) {
+            return true;
+        }
+        if ($this->status === 'Pronto para entrega' && ($this->status_pagamento === 'Pago' || $this->status_pagamento === 'Não Aplicável')) {
+            return true;
+        }
+        return false;
+    }
 }

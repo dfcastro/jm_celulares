@@ -104,7 +104,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('atendimentos.atualizarValoresServicoAjax');
     // A rota de autocomplete de atendimentos está pública acima.
     Route::post('/atendimentos/{atendimento}/registrar-pagamento-ajax', [AtendimentoController::class, 'registrarPagamentoAjax'])->name('atendimentos.registrarPagamentoAjax');
-
+    Route::post('/atendimentos/{atendimento}/atualizar-servicos-detalhados', [AtendimentoController::class, 'atualizarServicosDetalhadosAjax'])
+    ->name('atendimentos.atualizarServicosDetalhadosAjax');
+    
     // Rotas para Controle de Caixa
     Route::prefix('caixa')->name('caixa.')->group(function () {
         Route::get('/', [CaixaController::class, 'index'])->name('index'); // << Deve chamar CaixaController@index
@@ -119,6 +121,7 @@ Route::middleware(['auth'])->group(function () {
         // NOVAS ROTAS PARA MOVIMENTAÇÕES MANUAIS
         Route::get('/{caixa}/movimentacao/nova/{tipo}', [CaixaController::class, 'createMovimentacao'])->name('movimentacao.create'); // 'tipo' pode ser 'entrada' ou 'saida'
         Route::post('/{caixa}/movimentacao', [CaixaController::class, 'storeMovimentacao'])->name('movimentacao.store');
+        Route::get('/verificar-status-ajax', [CaixaController::class, 'verificarStatusAjax'])->name('verificarStatusAjax');
     });
 
     // Estoque

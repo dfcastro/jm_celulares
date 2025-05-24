@@ -7,7 +7,30 @@
     <div class="container mt-0"> {{-- Removi mt-5 pois o layout já tem padding --}}
 
         <h1>Nova Entrada de Estoque</h1>
-
+        @if(session('success'))
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i>{{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+        @if(session('error'))
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('error') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+        @if(session('info'))
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle-fill me-2"></i>{{ session('info') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+        @if(session('warning'))
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('warning') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
 
         <form action="{{ route('entradas-estoque.store') }}" method="POST">
             @csrf
@@ -15,8 +38,7 @@
                 <label for="estoque_nome" class="form-label">Peça</label>
                 {{-- Campo de texto para autocomplete --}}
                 <input type="text" class="form-control" id="estoque_nome"
-                    placeholder="Comece a digitar o nome ou modelo da peça..." value="{{ old('estoque_nome') }}"
-                    required>
+                    placeholder="Comece a digitar o nome ou modelo da peça..." value="{{ old('estoque_nome') }}" required>
                 {{-- Campo hidden para guardar o ID da peça selecionada --}}
                 <input type="hidden" id="estoque_id" name="estoque_id"
                     value="{{ old('estoque_id', $selectedEstoqueId ?? '') }}">
@@ -46,19 +68,19 @@
             <a href="{{ route('entradas-estoque.index') }}" class="btn btn-secondary">Cancelar</a>
         </form>
     </div>
-{{-- Inclua jQuery (se ainda não estiver incluído) e jQuery UI JS --}}
+    {{-- Inclua jQuery (se ainda não estiver incluído) e jQuery UI JS --}}
 
 
 @endsection
 @push('scripts')
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
 
 
     <script>
-        $(document).ready(function() {
+        $(document).ready(function () {
             $("#estoque_nome").autocomplete({
-                source: function(request, response) {
+                source: function (request, response) {
                     $.ajax({
                         url: "{{ route('estoque.autocomplete') }}",
                         type: 'GET',
@@ -66,18 +88,18 @@
                         data: {
                             search: request.term
                         },
-                        success: function(data) {
+                        success: function (data) {
                             response(data);
                         }
                     });
                 },
                 minLength: 2,
-                select: function(event, ui) {
+                select: function (event, ui) {
                     $('#estoque_nome').val(ui.item.value);
                     $('#estoque_id').val(ui.item.id);
                     return false;
                 },
-                change: function(event, ui) {
+                change: function (event, ui) {
                     if (!ui.item) {
                         $('#estoque_id').val('');
                         $('#estoque_nome').val('');
@@ -96,8 +118,8 @@
                     // Para buscar o nome da peça pelo ID
                     // No seu EstoqueController@autocomplete, você precisa adaptar para
                     // que ele também busque por ID se 'search' for um número.
-                    data: { search: selectedEstoqueId }, 
-                    success: function(data) {
+                    data: { search: selectedEstoqueId },
+                    success: function (data) {
                         if (data.length > 0) {
                             // O autocomplete retorna uma lista. Procuramos o item com o ID correspondente.
                             const item = data.find(i => i.id == selectedEstoqueId);
@@ -117,5 +139,3 @@
 @push('styles')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 @endpush
-
-

@@ -7,13 +7,37 @@
     <div class="container mt-0">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h1>Gerenciar Usuários do Sistema</h1>
+            @if(session('success'))
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i>{{ session('success') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            @endif
+            @if(session('error'))
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('error') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            @endif
+            @if(session('info'))
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle-fill me-2"></i>{{ session('info') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            @endif
+            @if(session('warning'))
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('warning') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            @endif
             <a href="{{ route('usuarios.create') }}" class="btn btn-primary">
                 <i class="bi bi-person-plus"></i> Novo Usuário
             </a>
         </div>
 
         @if(session('error'))
-             <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 {{ session('error') }}
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
@@ -54,15 +78,19 @@
                             </td>
                             <td>
                                 {{-- ... botões de ação ... --}}
-                                <a href="{{ route('usuarios.edit', $usuario->id) }}" class="btn btn-warning btn-sm" title="Editar"><i class="bi bi-pencil"></i></a>
+                                <a href="{{ route('usuarios.edit', $usuario->id) }}" class="btn btn-warning btn-sm"
+                                    title="Editar"><i class="bi bi-pencil"></i></a>
                                 @if(Auth::user()->id !== $usuario->id)
-                                    <form action="{{ route('usuarios.destroy', $usuario->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este usuário?');">
+                                    <form action="{{ route('usuarios.destroy', $usuario->id) }}" method="POST" class="d-inline"
+                                        onsubmit="return confirm('Tem certeza que deseja excluir este usuário?');">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="btn btn-danger btn-sm" title="Excluir"><i class="bi bi-trash"></i></button>
+                                        <button type="submit" class="btn btn-danger btn-sm" title="Excluir"><i
+                                                class="bi bi-trash"></i></button>
                                     </form>
                                 @else
-                                    <button class="btn btn-danger btn-sm" disabled title="Não pode excluir a si mesmo"><i class="bi bi-trash"></i></button>
+                                    <button class="btn btn-danger btn-sm" disabled title="Não pode excluir a si mesmo"><i
+                                            class="bi bi-trash"></i></button>
                                 @endif
                             </td>
                         </tr>

@@ -11,11 +11,28 @@
 
         {{-- Mensagens de Sucesso/Erro --}}
         @if(session('success'))
-            <div class="alert alert-success">{{ session('success') }}</div>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i>{{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
         @endif
-
         @if(session('error'))
-            <div class="alert alert-danger">{{ session('error') }}</div>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('error') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+        @if(session('info'))
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle-fill me-2"></i>{{ session('info') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+        @if(session('warning'))
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('warning') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
         @endif
 
         {{-- Bloco para exibir erros de validação --}}
@@ -39,20 +56,22 @@
                         <div class="row mb-3 align-items-center border-bottom pb-2">
                             <div class="col-md-5">
                                 <strong>Peça:</strong> {{ $itemVendido->nome }} ({{ $itemVendido->modelo_compativel ?? 'N/A' }})
-                                <input type="hidden" name="itens_devolver[{{ $loop->index }}][estoque_id]" value="{{ $itemVendido->id }}">
+                                <input type="hidden" name="itens_devolver[{{ $loop->index }}][estoque_id]"
+                                    value="{{ $itemVendido->id }}">
                             </div>
                             <div class="col-md-3">
                                 <p class="mb-0">Qtd Vendida: {{ $itemVendido->pivot->quantidade }}</p>
-                                <p class="mb-0">Preço Unitário: {{ 'R$ ' . number_format($itemVendido->pivot->preco_unitario_venda, 2, ',', '.') }}</p>
-                                <p class="mb-0">Desconto: {{ 'R$ ' . number_format($itemVendido->pivot->desconto, 2, ',', '.') }}</p>
+                                <p class="mb-0">Preço Unitário:
+                                    {{ 'R$ ' . number_format($itemVendido->pivot->preco_unitario_venda, 2, ',', '.') }}</p>
+                                <p class="mb-0">Desconto:
+                                    {{ 'R$ ' . number_format($itemVendido->pivot->desconto, 2, ',', '.') }}</p>
                             </div>
                             <div class="col-md-2">
                                 <label for="quantidade_devolver_{{ $loop->index }}" class="form-label">Qtd a Devolver</label>
                                 <input type="number" class="form-control" id="quantidade_devolver_{{ $loop->index }}"
                                     name="itens_devolver[{{ $loop->index }}][quantidade_devolver]"
-                                    value="{{ old('itens_devolver.' . $loop->index . '.quantidade_devolver', 0) }}"
-                                    min="0" max="{{ $itemVendido->pivot->quantidade }}"
-                                    data-item-id="{{ $itemVendido->id }}">
+                                    value="{{ old('itens_devolver.' . $loop->index . '.quantidade_devolver', 0) }}" min="0"
+                                    max="{{ $itemVendido->pivot->quantidade }}" data-item-id="{{ $itemVendido->id }}">
                                 @error('itens_devolver.' . $loop->index . '.quantidade_devolver')
                                     <div class="text-danger">{{ $message }}</div>
                                 @enderror
@@ -69,7 +88,8 @@
 
             <div class="mb-3">
                 <label for="observacoes_devolucao" class="form-label">Observações da Devolução (Opcional)</label>
-                <textarea class="form-control" id="observacoes_devolucao" name="observacoes_devolucao" rows="3">{{ old('observacoes_devolucao') }}</textarea>
+                <textarea class="form-control" id="observacoes_devolucao" name="observacoes_devolucao"
+                    rows="3">{{ old('observacoes_devolucao') }}</textarea>
                 @error('observacoes_devolucao')
                     <div class="text-danger">{{ $message }}</div>
                 @enderror
@@ -79,23 +99,24 @@
             <a href="{{ route('vendas-acessorios.show', $vendas_acessorio->id) }}" class="btn btn-secondary">Cancelar</a>
         </form>
     </div>
-  
-   
-    {{-- Se precisar de autocomplete, adicione jQuery UI JS aqui, mas para este formulário não é necessário --}}
-    {{-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script> --}}
 
-   
+
+    {{-- Se precisar de autocomplete, adicione jQuery UI JS aqui, mas para este formulário não é necessário --}}
+    {{--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script> --}}
+
+
 
 
 @endsection
 @push('scripts')
-<script>
-        $(document).ready(function() {
+    <script>
+        $(document).ready(function () {
             // Opcional: Adicionar lógica JavaScript para calcular valor total de devolução
             // ou para "selecionar tudo" se necessário.
         });
     </script>
-    @endpush
+@endpush
 {{-- Para esta página, não precisamos de @push('styles') ou @push('scripts') geralmente --}}
 {{-- Mas se você fosse adicionar ícones do Bootstrap, por exemplo: --}}
 @push('styles')

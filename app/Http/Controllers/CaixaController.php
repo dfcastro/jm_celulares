@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Gate;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Log; //
+use Illuminate\Support\Facades\Log; 
+use Illuminate\Http\JsonResponse;
+
 // Dentro de app/Http/Controllers/CaixaController.php
 
 class CaixaController extends Controller
@@ -332,6 +334,19 @@ class CaixaController extends Controller
         // 4. Passar o caixa e o saldo calculado para a view
         // Esta view nós criamos na mensagem anterior.
         return view('caixa.editFechar', compact('caixa', 'saldoFinalCalculado'));
+    }
+    /**
+     * Verifica o status do caixa atual via AJAX.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verificarStatusAjax(): JsonResponse
+    {
+        $caixaAberto = Caixa::where('status', 'Aberto')->first();
+        return response()->json([
+            'caixa_aberto' => (bool) $caixaAberto,
+            'caixa_id' => $caixaAberto ? $caixaAberto->id : null,
+        ]);
     }
     // ...
 }
