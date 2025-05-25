@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Carbon\Carbon;
 
 class VendaAcessorio extends Model
@@ -52,5 +53,14 @@ class VendaAcessorio extends Model
             return Carbon::parse($this->data_venda)->format('d/m/Y H:i');
         }
         return null;
+    }
+
+      /**
+     * Define o relacionamento com as devoluções desta venda.
+     * Uma VendaAcessorio pode ter várias DevolucaoVenda.
+     */
+    public function devolucoesVendas(): HasMany
+    {
+        return $this->hasMany(DevolucaoVenda::class, 'venda_acessorio_id');
     }
 }

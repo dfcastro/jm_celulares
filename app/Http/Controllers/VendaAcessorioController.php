@@ -21,10 +21,74 @@ class VendaAcessorioController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $vendas = VendaAcessorio::with('cliente')->latest()->paginate(10);
-        return view('vendas_acessorios.index', compact('vendas'));
+        $query = VendaAcessorio::with(['cliente', 'usuarioRegistrou']) // Adicionado 'usuarioRegistrou'
+            ->latest('data_venda');
+
+        // Filtro por Período
+        if ($request->filled('data_inicial_filtro') && $request->filled('data_final_filtro')) {
+            try {
+                $dataInicial = Carbon::parse($request->input('data_inicial_filtro'))->startOfDay();
+                $dataFinal = Carbon::parse($request->input('data_final_filtro'))->endOfDay();
+                if ($dataInicial->lte($dataFinal)) {
+                    $query->whereBetween('data_venda', [$dataInicial, $dataFinal]);
+                }
+            } catch (\Exception $e) { /* Tratar erro de data inválida se necessário */
+            }
+        } elseif ($request->filled('data_inicial_filtro')) {
+            try {
+                $query->where('data_venda', '>=', Carbon::parse($request->input('data_inicial_filtro'))->startOfDay());
+            } catch (\Exception $e) {
+            }
+        } elseif ($request->filled('data_final_filtro')) {
+            try {
+                $query->where('data_venda', '<=', Carbon::parse($request->input('data_final_filtro'))->endOfDay());
+            } catch (\Exception $e) {
+            }
+        }
+
+        // Filtro por Cliente
+        if ($request->filled('filtro_cliente_id')) {
+            $query->where('cliente_id', $request->input('filtro_cliente_id'));
+        }
+
+        // Filtro por Forma de Pagamento
+        if ($request->filled('filtro_forma_pagamento')) {
+            $query->where('forma_pagamento', $request->input('filtro_forma_pagamento'));
+        }
+
+        // Filtro por Usuário que Registrou a Venda
+        if ($request->filled('filtro_usuario_id')) {
+            $query->where('user_id', $request->input('filtro_usuario_id'));
+        }
+
+        $vendas = $query->paginate(10)->appends($request->query());
+
+        $clienteSelecionadoNome = null;
+        if ($request->filled('filtro_cliente_id') && $request->filled('filtro_cliente_nome_display')) {
+            $clienteSelecionadoNome = $request->input('filtro_cliente_nome_display');
+        } elseif ($request->filled('filtro_cliente_id')) {
+            $cliente = Cliente::find($request->input('filtro_cliente_id'));
+            if ($cliente) {
+                $clienteSelecionadoNome = $cliente->nome_completo . ($cliente->cpf_cnpj ? ' (' . $cliente->cpf_cnpj . ')' : '');
+            }
+        }
+
+        $formasPagamentoDisponiveis = config('constants.formas_pagamento', []);
+
+        // Para filtro de usuário (se você quiser adicionar)
+        $usuariosSistema = \App\Models\User::whereIn('tipo_usuario', ['admin', 'atendente', 'tecnico'])
+            ->orderBy('name')->get(['id', 'name']);
+
+
+        return view('vendas_acessorios.index', compact(
+            'vendas',
+            'clienteSelecionadoNome',
+            'formasPagamentoDisponiveis',
+            'usuariosSistema', // Passa para o filtro de usuário
+            'request'
+        ));
     }
 
     /**
@@ -49,15 +113,11 @@ class VendaAcessorioController extends Controller
         return view('vendas_acessorios.create', compact('clientes', 'selectedEstoqueId', 'formasPagamento'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        // 1. Validação dos dados da venda (você já deve ter isso)
         $validatedData = $request->validate([
             'cliente_id' => 'nullable|exists:clientes,id',
-            'data_venda' => 'required|date',
+            'data_venda' => 'required|date', // Validar o formato da data do input
             'forma_pagamento' => 'nullable|string|max:50',
             'observacoes' => 'nullable|string',
             'itens' => 'required|array|min:1',
@@ -67,101 +127,87 @@ class VendaAcessorioController extends Controller
             'itens.*.desconto' => 'nullable|numeric|min:0',
         ]);
 
-        // ---- INÍCIO DA LÓGICA DE TRANSAÇÃO (OPCIONAL MAS RECOMENDADO) ----
-        // DB::beginTransaction();
-        // try {
-        // ---- FIM DA LÓGICA DE TRANSAÇÃO ----
+        DB::beginTransaction();
+        try {
+            $vendaAcessorio = new VendaAcessorio();
+            $vendaAcessorio->cliente_id = $validatedData['cliente_id'];
 
-        // 2. Criação da VendaAcessorio (você já deve ter isso)
-        $vendaAcessorio = new VendaAcessorio();
-        $vendaAcessorio->cliente_id = $validatedData['cliente_id'];
-        // A data_venda já vem formatada do formulário create (Y-m-d),
-        // mas se vier como d/m/Y, precisa converter: Carbon::createFromFormat('d/m/Y', $validatedData['data_venda'])->toDateString();
-        // Para datetime, se o campo for datetime:
-        $vendaAcessorio->data_venda = Carbon::parse($validatedData['data_venda'])->toDateTimeString();
-        $vendaAcessorio->valor_total = 0; // Será calculado abaixo
-        $vendaAcessorio->forma_pagamento = $validatedData['forma_pagamento'];
-        $vendaAcessorio->observacoes = $validatedData['observacoes'];
-        $vendaAcessorio->user_id = Auth::id(); // Usuário que registrou a venda
-        $vendaAcessorio->save();
+            // --- CORREÇÃO DA DATA E HORA ---
+            // Pega a data do formulário e adiciona a hora atual
+            $dataDoFormulario = $validatedData['data_venda']; // Ex: "2025-05-25"
+            $vendaAcessorio->data_venda = Carbon::parse($dataDoFormulario)->setTimeFrom(Carbon::now());
+            // Ou, para ser mais explícito com o formato:
+            // Ou, se quiser que seja exatamente a hora atual do servidor no momento do clique:
+            // $vendaAcessorio->data_venda = Carbon::now(); // Isso ignora a data selecionada no formulário
+            // A melhor abordagem é pegar a data do formulário e o horário do momento do registro:
+            // $vendaAcessorio->data_venda = Carbon::createFromFormat('Y-m-d H:i:s', $dataDoFormulario . ' ' . Carbon::now()->format('H:i:s'));
 
-        // 3. Processamento dos Itens da Venda e Cálculo do Valor Total (você já deve ter isso)
-        $valorTotalCalculado = 0;
-        foreach ($validatedData['itens'] as $itemVendaData) {
-            $itemEstoque = Estoque::findOrFail($itemVendaData['item_estoque_id']);
-            $quantidadeVendida = (int) $itemVendaData['quantidade'];
-            $precoUnitario = (float) $itemVendaData['preco_unitario'];
-            $descontoItem = (float) ($itemVendaData['desconto'] ?? 0);
+            $vendaAcessorio->valor_total = 0; // Será calculado
+            $vendaAcessorio->forma_pagamento = $validatedData['forma_pagamento'];
+            $vendaAcessorio->observacoes = $validatedData['observacoes'];
+            $vendaAcessorio->user_id = Auth::id();
+            $vendaAcessorio->save();
 
-            // Validação de estoque (IMPORTANTE)
-            if ($itemEstoque->quantidade < $quantidadeVendida) {
-                // DB::rollBack(); // Se estiver usando transação
-                return redirect()->back()
-                    ->with('error', "Estoque insuficiente para o item '{$itemEstoque->nome}'. Disponível: {$itemEstoque->quantidade}, Solicitado: {$quantidadeVendida}.")
-                    ->withInput();
-            }
+            $valorTotalCalculado = 0;
+            foreach ($validatedData['itens'] as $itemVendaData) {
+                // ... (lógica de itens e estoque como antes) ...
+                $itemEstoque = Estoque::findOrFail($itemVendaData['item_estoque_id']);
+                $quantidadeVendida = (int) $itemVendaData['quantidade'];
+                $precoUnitario = (float) $itemVendaData['preco_unitario'];
+                $descontoItem = (float) ($itemVendaData['desconto'] ?? 0);
 
-            $subtotalItem = ($quantidadeVendida * $precoUnitario) - $descontoItem;
-            $valorTotalCalculado += $subtotalItem;
+                if ($itemEstoque->quantidade < $quantidadeVendida) {
+                    DB::rollBack();
+                    return redirect()->back()
+                        ->with('error', "Estoque insuficiente para o item '{$itemEstoque->nome}'. Disponível: {$itemEstoque->quantidade}, Solicitado: {$quantidadeVendida}.")
+                        ->withInput();
+                }
 
-            // Adicionar item à tabela pivot venda_acessorio_estoque
-            $vendaAcessorio->itensEstoque()->attach($itemEstoque->id, [
-                'quantidade' => $quantidadeVendida,
-                'preco_unitario_venda' => $precoUnitario,
-                'desconto' => $descontoItem,
-            ]);
+                $subtotalItem = ($quantidadeVendida * $precoUnitario) - $descontoItem;
+                $valorTotalCalculado += $subtotalItem;
 
-            // Decrementar estoque
-            $itemEstoque->decrement('quantidade', $quantidadeVendida);
-
-            // Registrar Saída de Estoque (se você tiver essa lógica separada também)
-            // SaidaEstoque::create([...]);
-        }
-
-        // Atualizar o valor total da venda
-        $vendaAcessorio->valor_total = $valorTotalCalculado;
-        $vendaAcessorio->save();
-
-
-        // 4. ***** NOVA LÓGICA: REGISTRAR MOVIMENTAÇÃO NO CAIXA *****
-        $caixaAberto = Caixa::getCaixaAbertoAtual();
-
-        if ($caixaAberto) {
-            if ($vendaAcessorio->valor_total > 0) { // Só registra se houver valor
-                MovimentacaoCaixa::create([
-                    'caixa_id' => $caixaAberto->id,
-                    'usuario_id' => Auth::id(), // Usuário que fez a venda/registrou no caixa
-                    'tipo' => 'ENTRADA',
-                    'descricao' => "Recebimento Venda de Acessório #" . $vendaAcessorio->id,
-                    'valor' => $vendaAcessorio->valor_total,
-                    'forma_pagamento' => $vendaAcessorio->forma_pagamento, // Assume que a forma de pagamento da venda é a do caixa
-                    'referencia_id' => $vendaAcessorio->id,
-                    'referencia_tipo' => VendaAcessorio::class, // Eloquent usará o namespace completo
-                    'data_movimentacao' => Carbon::now(), // Ou $vendaAcessorio->data_venda se preferir
-                    'observacoes' => 'Venda registrada pelo sistema.',
+                $vendaAcessorio->itensEstoque()->attach($itemEstoque->id, [
+                    'quantidade' => $quantidadeVendida,
+                    'preco_unitario_venda' => $precoUnitario,
+                    'desconto' => $descontoItem,
+                    'created_at' => now(), // Adiciona timestamp para a tabela pivô
+                    'updated_at' => now(), // Adiciona timestamp para a tabela pivô
                 ]);
+                $itemEstoque->decrement('quantidade', $quantidadeVendida);
             }
-        } else {
-            // Opcional: Lidar com o caso de não haver caixa aberto.
-            // Poderia ser um warning na sessão, um log, ou impedir a venda se o caixa aberto for obrigatório.
-            // Por enquanto, apenas não registra no caixa se não houver um aberto.
-            // Session::flash('warning', 'Nenhum caixa aberto. A movimentação financeira desta venda não foi registrada no caixa.');
+
+            $vendaAcessorio->valor_total = $valorTotalCalculado;
+            $vendaAcessorio->save();
+
+            // Lógica do Caixa (como antes)
+            $caixaAberto = Caixa::getCaixaAbertoAtual();
+            if ($caixaAberto) {
+                if ($vendaAcessorio->valor_total > 0) {
+                    MovimentacaoCaixa::create([
+                        'caixa_id' => $caixaAberto->id,
+                        'usuario_id' => Auth::id(),
+                        'tipo' => 'ENTRADA',
+                        'descricao' => "Recebimento Venda de Acessório #" . $vendaAcessorio->id,
+                        'valor' => $vendaAcessorio->valor_total,
+                        'forma_pagamento' => $vendaAcessorio->forma_pagamento,
+                        'referencia_id' => $vendaAcessorio->id,
+                        'referencia_tipo' => VendaAcessorio::class,
+                        'data_movimentacao' => $vendaAcessorio->data_venda, // Usa a data_venda com horário
+                        'observacoes' => 'Venda registrada pelo sistema.',
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return redirect()->route('vendas-acessorios.show', $vendaAcessorio->id)
+                ->with('success', 'Venda de acessório registrada com sucesso!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro ao registrar venda de acessório: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->back()
+                ->with('error', 'Erro ao registrar a venda. Tente novamente. Detalhes: ' . $e->getMessage())
+                ->withInput();
         }
-        // ***** FIM DA NOVA LÓGICA *****
-
-
-        // ---- INÍCIO DA LÓGICA DE TRANSAÇÃO (OPCIONAL MAS RECOMENDADO) ----
-        // DB::commit();
-        return redirect()->route('vendas-acessorios.show', $vendaAcessorio->id)
-            ->with('success', 'Venda de acessório registrada com sucesso!');
-        // } catch (\Exception $e) {
-        //     DB::rollBack();
-        //     // Log::error("Erro ao registrar venda de acessório: " . $e->getMessage());
-        //     return redirect()->back()
-        //                      ->with('error', 'Erro ao registrar a venda. Tente novamente. Detalhes: ' . $e->getMessage())
-        //                      ->withInput();
-        // }
-        // ---- FIM DA LÓGICA DE TRANSAÇÃO ----
     }
 
     /**
@@ -275,16 +321,11 @@ class VendaAcessorioController extends Controller
      */
     public function showDevolucaoForm(VendaAcessorio $vendas_acessorio)
     {
-        // Carrega os itens vendidos e o cliente para exibir no formulário
-        $vendas_acessorio->load('itensVendidos', 'cliente');
+        $vendas_acessorio->load('itensEstoque', 'cliente', 'devolucoesVendas'); // Carrega os três relacionamentos
+        // ou $vendas_acessorio->loadMissing(['itensEstoque', 'cliente', 'devolucoesVendas']);
 
-        // Você também pode carregar as devoluções existentes para essa venda, se houver
-        $vendas_acessorio->load('devolucoesVendas');
-
-        // Passa a venda para a view
         return view('vendas_acessorios.devolver', compact('vendas_acessorio'));
     }
-
     /**
      * Processa o registro de uma devolução de venda.
      *
