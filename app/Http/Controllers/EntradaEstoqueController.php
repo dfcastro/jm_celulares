@@ -12,13 +12,63 @@ use Carbon\Carbon;
 
 class EntradaEstoqueController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(Request $request)
     {
-        $entradas = EntradaEstoque::with('estoque')->latest()->paginate(10);
-        return view('entradas_estoque.index', compact('entradas'));
+        $query = EntradaEstoque::with('estoque')->latest('data_entrada'); // Ordena pela data de entrada mais recente
+
+        // Filtro por Período (Data de Entrada)
+        if ($request->filled('data_inicial_filtro') && $request->filled('data_final_filtro')) {
+            try {
+                $dataInicial = Carbon::parse($request->input('data_inicial_filtro'))->startOfDay();
+                $dataFinal = Carbon::parse($request->input('data_final_filtro'))->endOfDay();
+                if ($dataInicial->lte($dataFinal)) {
+                    $query->whereBetween('data_entrada', [$dataInicial, $dataFinal]);
+                }
+            } catch (\Exception $e) {
+                // Lidar com data inválida, talvez com um flash message de erro
+            }
+        } elseif ($request->filled('data_inicial_filtro')) {
+            try {
+                $query->where('data_entrada', '>=', Carbon::parse($request->input('data_inicial_filtro'))->startOfDay());
+            } catch (\Exception $e) {
+            }
+        } elseif ($request->filled('data_final_filtro')) {
+            try {
+                $query->where('data_entrada', '<=', Carbon::parse($request->input('data_final_filtro'))->endOfDay());
+            } catch (\Exception $e) {
+            }
+        }
+
+        // Filtro por Peça Específica (ID da peça vindo do autocomplete)
+        if ($request->filled('filtro_peca_id')) {
+            $query->where('estoque_id', $request->input('filtro_peca_id'));
+        }
+
+        // Filtro por Observações da Entrada
+        if ($request->filled('busca_obs_entrada')) {
+            $searchTerm = $request->input('busca_obs_entrada');
+            $query->where('observacoes', 'like', '%' . $searchTerm . '%');
+        }
+
+        $entradas = $query->paginate(15); // Mantive 15, ajuste se necessário
+        $entradas->appends($request->query()); // Importante para manter os filtros na paginação
+
+        // Para o autocomplete no filtro de peças
+        $pecaSelecionadaNome = null;
+        if ($request->filled('filtro_peca_id') && $request->filled('filtro_peca_nome_display')) {
+            // Se o ID está presente e o nome também (veio do submit do form com autocomplete preenchido),
+            // usamos o nome que já veio para evitar uma nova consulta só para o display.
+            $pecaSelecionadaNome = $request->input('filtro_peca_nome_display');
+        } elseif ($request->filled('filtro_peca_id')) {
+            // Se só o ID veio (ex: URL direta), busca o nome da peça.
+            $peca = Estoque::find($request->input('filtro_peca_id'));
+            if ($peca) {
+                $pecaSelecionadaNome = $peca->nome . ($peca->modelo_compativel ? ' (' . $peca->modelo_compativel . ')' : '');
+            }
+        }
+
+
+        return view('entradas_estoque.index', compact('entradas', 'pecaSelecionadaNome'));
     }
 
     /**

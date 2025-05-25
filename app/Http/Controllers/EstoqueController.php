@@ -10,6 +10,8 @@ use App\Models\SaidaEstoque;   // Certifique-se de importar
 use Illuminate\Pagination\LengthAwarePaginator; // Importar para paginação manual de coleção
 use Illuminate\Support\Collection; // Importar para manipular coleções
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class EstoqueController extends Controller
 {
@@ -171,7 +173,7 @@ class EstoqueController extends Controller
 
         $estoque->save();
         return redirect()->route('estoque.index')
-                         ->with('success', "Item '{$estoque->nome}' (ID: {$estoque->id}) atualizado com sucesso!");
+            ->with('success', "Item '{$estoque->nome}' (ID: {$estoque->id}) atualizado com sucesso!");
     }
 
     /**
@@ -194,7 +196,7 @@ class EstoqueController extends Controller
             $itemIdExcluido = $estoque->id;
             $estoque->delete();
             return redirect()->route('estoque.index')
-                             ->with('success', "Item '{$nomeItemExcluido}' (ID: {$itemIdExcluido}) removido do estoque com sucesso!");
+                ->with('success', "Item '{$nomeItemExcluido}' (ID: {$itemIdExcluido}) removido do estoque com sucesso!");
 
         } catch (\Illuminate\Database\QueryException $e) {
             // Captura a exceção de violação de integridade (Foreign Key constraint fails)
@@ -255,11 +257,10 @@ class EstoqueController extends Controller
     public function autocomplete(Request $request)
     {
         $search = $request->get('search');
-        $tiposFiltrar = $request->get('tipos_filtro'); // Novo: Pega o parâmetro de filtro de tipos
+        $tiposFiltrar = $request->get('tipos_filtro');
 
         $query = Estoque::query();
 
-        // Aplica o filtro de busca por nome/modelo/id
         if ($search) {
             $query->where(function ($q) use ($search) {
                 if (is_numeric($search)) {
@@ -271,32 +272,37 @@ class EstoqueController extends Controller
             });
         }
 
-        // NOVO: Aplica o filtro por tipo, se fornecido
         if (!empty($tiposFiltrar) && is_array($tiposFiltrar)) {
             $query->whereIn('tipo', $tiposFiltrar);
         }
 
-        // Opcional: Adicionar um filtro para mostrar apenas itens com quantidade > 0,
-        // especialmente se este autocomplete for usado em contextos de saída/venda.
-        // $query->where('quantidade', '>', 0);
-
         $itensEstoque = $query->limit(20)
-            ->get(['id', 'nome', 'modelo_compativel', 'quantidade', 'preco_venda', 'tipo']); // Adicionado 'tipo'
+            ->get(['id', 'nome', 'modelo_compativel', 'quantidade', 'preco_venda', 'tipo']); // Garanta que 'tipo' está aqui
 
         $formattedItems = $itensEstoque->map(function ($item) {
-            $label = $item->nome . ' (' . ($item->modelo_compativel ?? 'N/A') . ')';
+            $label = $item->nome . ($item->modelo_compativel ? ' (' . $item->modelo_compativel . ')' : '');
             $label .= ' - Qtd: ' . $item->quantidade;
-            // Opcional: Adicionar o tipo ao label se desejar
-            // if ($item->tipo) {
-            //     $label .= ' - Tipo: ' . $item->tipo;
-            // }
+            if ($item->tipo) {
+                $tipoFormatado = '';
+                if ($item->tipo == 'PECA_REPARO')
+                    $tipoFormatado = 'Peça p/ Reparo';
+                elseif ($item->tipo == 'ACESSORIO_VENDA')
+                    $tipoFormatado = 'Acessório';
+                elseif ($item->tipo == 'GERAL')
+                    $tipoFormatado = 'Geral';
+                else
+                    $tipoFormatado = $item->tipo;
+                $label .= ' - Tipo: ' . $tipoFormatado;
+            }
 
             return [
                 'label' => $label,
-                'value' => $item->nome . ' (' . ($item->modelo_compativel ?? 'N/A') . ')',
+                'value' => $item->nome . ($item->modelo_compativel ? ' (' . $item->modelo_compativel . ')' : ''),
                 'id' => $item->id,
                 'preco_venda' => number_format($item->preco_venda ?? 0, 2, '.', ''),
                 'quantidade_disponivel' => $item->quantidade,
+                'tipo_formatado' => $tipoFormatado ?? ($item->tipo ?? 'N/D'), // <<< NOVO CAMPO para usar no JS
+                'tipo_original' => $item->tipo // Mantém o tipo original se precisar
             ];
         });
 
@@ -306,57 +312,132 @@ class EstoqueController extends Controller
     /**
      * Exibe o histórico unificado de todas as movimentações (entradas e saídas).
      */
-    public function historicoUnificado(Request $request) // Receber Request para o parâmetro de paginação
+    public function historicoUnificado(Request $request)
     {
-        // Busca todas as entradas
-        $entradas = EntradaEstoque::with('estoque')
-            ->get() // Coleta todas as entradas
-            ->map(function ($entrada) {
-                return [
-                    'tipo' => 'Entrada',
-                    'quantidade' => $entrada->quantidade,
-                    'data' => $entrada->data_entrada, // Já é um objeto Carbon
-                    'peca' => $entrada->estoque->nome . ' (' . ($entrada->estoque->modelo_compativel ?? 'N/A') . ')',
-                    'observacoes' => $entrada->observacoes,
-                    'relacionado' => null, // Entradas não são diretamente ligadas a atendimentos
-                ];
-            });
+        $filtroDataInicial = $request->input('data_inicial_filtro');
+        $filtroDataFinal = $request->input('data_final_filtro');
+        $filtroTipoMovimentacao = $request->input('tipo_movimentacao_filtro');
+        $filtroPecaId = $request->input('filtro_peca_id');
+        $filtroObs = $request->input('busca_obs_filtro');
 
-        // Busca todas as saídas
-        $saidas = SaidaEstoque::with('estoque', 'atendimento')
-            ->get() // Coleta todas as saídas
-            ->map(function ($saida) {
-                return [
-                    'tipo' => 'Saída',
-                    'quantidade' => $saida->quantidade,
-                    'data' => $saida->data_saida, // Já é um objeto Carbon
-                    'peca' => $saida->estoque->nome . ' (' . ($saida->estoque->modelo_compativel ?? 'N/A') . ')',
-                    'observacoes' => $saida->observacoes,
-                    'relacionado' => $saida->atendimento ? 'Atendimento #' . $saida->atendimento->id : 'Não Vinculado',
-                ];
-            });
+        // --- Subqueries para Entradas e Saídas com filtros aplicados ---
+        $entradasQueryFiltrada = DB::table('entradas_estoque as mov')
+            ->join('estoque as est', 'mov.estoque_id', '=', 'est.id')
+            ->select(
+                DB::raw("'Entrada' as tipo_movimentacao_label"),
+                'mov.id as movimentacao_id',
+                'mov.quantidade',
+                'mov.data_entrada as data_movimentacao',
+                'est.nome as nome_peca',
+                'est.modelo_compativel as modelo_peca',
+                'est.id as estoque_id_original',
+                'mov.observacoes',
+                DB::raw("NULL as atendimento_id"),
+                DB::raw("NULL as cliente_atendimento")
+            );
 
-        // Combina as duas coleções de movimentações
-        $movimentacoes = $entradas->concat($saidas);
+        $saidasQueryFiltrada = DB::table('saidas_estoque as mov')
+            ->join('estoque as est', 'mov.estoque_id', '=', 'est.id')
+            ->leftJoin('atendimentos as atend', 'mov.atendimento_id', '=', 'atend.id')
+            ->leftJoin('clientes as cli', 'atend.cliente_id', '=', 'cli.id')
+            ->select(
+                DB::raw("'Saída' as tipo_movimentacao_label"),
+                'mov.id as movimentacao_id',
+                'mov.quantidade', // Quantidade é positiva, o tipo 'Saída' indica a natureza
+                'mov.data_saida as data_movimentacao',
+                'est.nome as nome_peca',
+                'est.modelo_compativel as modelo_peca',
+                'est.id as estoque_id_original',
+                'mov.observacoes',
+                'mov.atendimento_id',
+                'cli.nome_completo as cliente_atendimento'
+            );
 
-        // Ordena a coleção combinada pela data (mais recente primeiro)
-        $movimentacoes = $movimentacoes->sortByDesc('data');
+        // Aplicar filtros comuns
+        if ($filtroPecaId) {
+            $entradasQueryFiltrada->where('mov.estoque_id', $filtroPecaId);
+            $saidasQueryFiltrada->where('mov.estoque_id', $filtroPecaId);
+        }
+        if ($filtroDataInicial) {
+            try {
+                $dtInicio = Carbon::parse($filtroDataInicial)->startOfDay();
+                $entradasQueryFiltrada->where('mov.data_entrada', '>=', $dtInicio);
+                $saidasQueryFiltrada->where('mov.data_saida', '>=', $dtInicio);
+            } catch (\Exception $e) {
+            }
+        }
+        if ($filtroDataFinal) {
+            try {
+                $dtFim = Carbon::parse($filtroDataFinal)->endOfDay();
+                $entradasQueryFiltrada->where('mov.data_entrada', '<=', $dtFim);
+                $saidasQueryFiltrada->where('mov.data_saida', '<=', $dtFim);
+            } catch (\Exception $e) {
+            }
+        }
+        if ($filtroObs) {
+            $entradasQueryFiltrada->where('mov.observacoes', 'like', '%' . $filtroObs . '%');
+            $saidasQueryFiltrada->where('mov.observacoes', 'like', '%' . $filtroObs . '%');
+        }
 
-        // Agora, fazemos a paginação manual da coleção combinada
-        $perPage = 10; // Quantidade de itens por página
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $currentItems = $movimentacoes->slice(($currentPage - 1) * $perPage, $perPage)->values();
+        // --- Cálculo dos Totalizadores ---
+        $totalEntradasQuantidade = 0;
+        $totalSaidasQuantidade = 0;
 
-        $movimentacoesPaginadas = new LengthAwarePaginator(
-            $currentItems,
-            $movimentacoes->count(),
-            $perPage,
-            $currentPage,
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
+        if ($filtroTipoMovimentacao === 'Entrada' || empty($filtroTipoMovimentacao)) {
+            // Clona a query de entradas ANTES de aplicar união para cálculo do total
+            $totalEntradasQuantidade = (clone $entradasQueryFiltrada)->sum('mov.quantidade');
+        }
+        if ($filtroTipoMovimentacao === 'Saída' || empty($filtroTipoMovimentacao)) {
+            // Clona a query de saídas ANTES de aplicar união para cálculo do total
+            $totalSaidasQuantidade = (clone $saidasQueryFiltrada)->sum('mov.quantidade');
+        }
 
-        // Retorna a view com os dados das movimentações paginadas
-        return view('estoque.historico_unificado', compact('movimentacoesPaginadas')); // Mudamos o nome da variável
+        // Se o filtro for específico, o outro total será 0
+        if ($filtroTipoMovimentacao === 'Entrada') {
+            $totalSaidasQuantidade = 0;
+        } elseif ($filtroTipoMovimentacao === 'Saída') {
+            $totalEntradasQuantidade = 0;
+        }
+
+        $saldoMovimentacoes = $totalEntradasQuantidade - $totalSaidasQuantidade;
+
+        // --- Construção da Query para Paginação ---
+        if ($filtroTipoMovimentacao === 'Entrada') {
+            $movimentacoesQueryPaginacao = $entradasQueryFiltrada;
+        } elseif ($filtroTipoMovimentacao === 'Saída') {
+            $movimentacoesQueryPaginacao = $saidasQueryFiltrada;
+        } else {
+            $movimentacoesQueryPaginacao = $entradasQueryFiltrada->unionAll($saidasQueryFiltrada);
+        }
+
+        // Para ordenar a query combinada, precisamos envolvê-la se estivermos usando UNION
+        // Se não for UNION (filtro de tipo específico), podemos ordenar diretamente.
+        if ($filtroTipoMovimentacao === 'Entrada' || $filtroTipoMovimentacao === 'Saída') {
+            $movimentacoesPaginadas = $movimentacoesQueryPaginacao->orderBy('data_movimentacao', 'desc')->paginate(15)->appends($request->query());
+        } else { // Caso de UNION ALL (Todas as movimentações)
+            // Envolver a UNION em uma subquery para permitir ordenação no resultado combinado
+            $queryBuilderOrdenada = DB::query()->fromSub($movimentacoesQueryPaginacao, 'sub')
+                ->orderBy('data_movimentacao', 'desc');
+            $movimentacoesPaginadas = $queryBuilderOrdenada->paginate(15)->appends($request->query());
+        }
+
+
+        $pecaSelecionadaNomeFiltro = null;
+        if ($filtroPecaId) {
+            $peca = Estoque::find($filtroPecaId);
+            if ($peca) {
+                $pecaSelecionadaNomeFiltro = $peca->nome . ($peca->modelo_compativel ? ' (' . $peca->modelo_compativel . ')' : '');
+            }
+        }
+
+        return view('estoque.historico_unificado', compact(
+            'movimentacoesPaginadas',
+            'pecaSelecionadaNomeFiltro',
+            'request', // Passa o objeto request para fácil acesso aos filtros na view
+            'totalEntradasQuantidade',
+            'totalSaidasQuantidade',
+            'saldoMovimentacoes'
+        ));
     }
 
 }

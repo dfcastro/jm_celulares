@@ -7,6 +7,7 @@ use App\Models\OrcamentoItem;
 use App\Models\AtendimentoServico;
 use App\Models\Cliente;
 use App\Models\Estoque;
+
 use App\Models\User;
 use App\Models\Atendimento;
 use App\Models\SaidaEstoque;
@@ -85,18 +86,20 @@ class OrcamentoController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(Request $request)
+    public function create(Request $request) // Injete o Request aqui
     {
         $clientes = Cliente::orderBy('nome_completo')->get();
         $usuarios = User::whereIn('tipo_usuario', ['admin', 'tecnico', 'atendente'])->orderBy('name')->get();
         $statusOrcamento = Orcamento::getPossibleStatuses();
         $tiposDesconto = ['percentual' => 'Percentual (%)', 'fixo' => 'Valor Fixo (R$)'];
 
+        // Se você realmente precisar do objeto $request completo na view:
         return view('orcamentos.create', compact(
             'clientes',
             'usuarios',
             'statusOrcamento',
-            'tiposDesconto'
+            'tiposDesconto',
+            'request' // Passando o objeto request
         ));
     }
 
@@ -578,8 +581,8 @@ class OrcamentoController extends Controller
             // Laudo técnico inicial pode ser uma referência ao orçamento ou observações gerais
             // Os serviços detalhados irão para a tabela 'atendimento_servicos'
             $novoAtendimento->laudo_tecnico = "Serviços e peças conforme Orçamento #" . $orcamento->id . ".";
-            if(!empty($orcamento->observacoes_internas)){ // Adiciona observações internas do orçamento, se houver
-                 $novoAtendimento->observacoes = "Observações do Orçamento #".$orcamento->id.":\n".$orcamento->observacoes_internas;
+            if (!empty($orcamento->observacoes_internas)) { // Adiciona observações internas do orçamento, se houver
+                $novoAtendimento->observacoes = "Observações do Orçamento #" . $orcamento->id . ":\n" . $orcamento->observacoes_internas;
             }
 
 
@@ -641,7 +644,7 @@ class OrcamentoController extends Controller
                     }
                 } elseif ($itemOrcado->tipo_item == 'servico') {
                     // ***** AQUI CRIAMOS O AtendimentoServico *****
-                    $subtotalServicoItem = (float)$itemOrcado->quantidade * (float)$itemOrcado->valor_unitario;
+                    $subtotalServicoItem = (float) $itemOrcado->quantidade * (float) $itemOrcado->valor_unitario;
                     AtendimentoServico::create([
                         'atendimento_id' => $novoAtendimento->id,
                         'descricao_servico' => $itemOrcado->descricao_item_manual,
@@ -680,7 +683,7 @@ class OrcamentoController extends Controller
                 // Se o desconto no orçamento era apenas sobre serviços (ou proporcionalmente)
                 // E o orçamento tinha apenas serviços, o desconto é totalmente para os serviços.
                 if ($orcamento->valor_total_pecas == 0) {
-                     $novoAtendimento->desconto_servico = $descontoTotalNoOrcamento;
+                    $novoAtendimento->desconto_servico = $descontoTotalNoOrcamento;
                 } else if ($orcamento->valor_total_servicos > 0) {
                     // Se havia peças e serviços, e queremos aplicar o desconto proporcionalmente
                     // apenas aos serviços da OS.

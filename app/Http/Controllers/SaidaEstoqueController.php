@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\DB;
 
 
 class SaidaEstoqueController extends Controller
@@ -18,9 +19,9 @@ class SaidaEstoqueController extends Controller
      */
     public function index(Request $request)
     {
-        $query = SaidaEstoque::with(['estoque', 'atendimento.cliente']); // Eager load com nested relationship
+        $query = SaidaEstoque::with(['estoque', 'atendimento.cliente']);
 
-        // Filtro por Período (Data da Saída)
+        // Filtros existentes (mantidos como antes)
         if ($request->filled('data_inicial_filtro') && $request->filled('data_final_filtro')) {
             $dataInicial = Carbon::parse($request->input('data_inicial_filtro'))->startOfDay();
             $dataFinal = Carbon::parse($request->input('data_final_filtro'))->endOfDay();
@@ -33,37 +34,49 @@ class SaidaEstoqueController extends Controller
             $query->where('data_saida', '<=', Carbon::parse($request->input('data_final_filtro'))->endOfDay());
         }
 
-        // Filtro por Peça Específica (ID da peça)
         if ($request->filled('filtro_peca_id')) {
             $query->where('estoque_id', $request->input('filtro_peca_id'));
         }
 
-        // Filtro por Atendimento Específico (ID do atendimento)
         if ($request->filled('filtro_atendimento_id')) {
-            if ($request->input('filtro_atendimento_id') == '0') { // Para "Não Vinculado"
+            if ($request->input('filtro_atendimento_id') == '0') {
                 $query->whereNull('atendimento_id');
             } else {
                 $query->where('atendimento_id', $request->input('filtro_atendimento_id'));
             }
         }
 
-        // Filtro por Observações da Saída
         if ($request->filled('busca_obs_saida')) {
             $searchTerm = $request->input('busca_obs_saida');
             $query->where('observacoes', 'like', '%' . $searchTerm . '%');
         }
 
-
         $saidas = $query->orderBy('data_saida', 'desc')->paginate(15);
         $saidas->appends($request->query());
 
-        // Para os autocompletes/selects de filtro na view (opcional, mas bom para UX)
-        // Se você for usar select para peça/atendimento em vez de autocomplete, precisaria passar $pecas e $atendimentos aqui.
-        // Para autocomplete, não precisa passar a lista inteira.
+        // Para repopular os campos de display dos autocompletes nos filtros
+        $pecaSelecionadaNome = null;
+        if ($request->filled('filtro_peca_id') && $request->filled('filtro_peca_nome_display')) {
+            $pecaSelecionadaNome = $request->input('filtro_peca_nome_display');
+        } elseif ($request->filled('filtro_peca_id')) {
+            $peca = Estoque::find($request->input('filtro_peca_id'));
+            if ($peca) {
+                $pecaSelecionadaNome = $peca->nome . ($peca->modelo_compativel ? ' (' . $peca->modelo_compativel . ')' : '');
+            }
+        }
 
-        return view('saidas_estoque.index', compact('saidas'));
+        $atendimentoSelecionadoInfo = null;
+        if ($request->filled('filtro_atendimento_id') && $request->filled('filtro_atendimento_info')) {
+            $atendimentoSelecionadoInfo = $request->input('filtro_atendimento_info');
+        } elseif ($request->filled('filtro_atendimento_id') && $request->input('filtro_atendimento_id') != '0') {
+            $atendimento = Atendimento::with('cliente')->find($request->input('filtro_atendimento_id'));
+            if ($atendimento) {
+                $atendimentoSelecionadoInfo = '#' . $atendimento->id . ($atendimento->cliente ? ' - ' . $atendimento->cliente->nome_completo : ' - Cliente não associado');
+            }
+        }
+
+        return view('saidas_estoque.index', compact('saidas', 'pecaSelecionadaNome', 'atendimentoSelecionadoInfo'));
     }
-
 
     /**
      * Show the form for creating a new resource.
@@ -141,10 +154,15 @@ class SaidaEstoqueController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(SaidaEstoque $saidaEstoque) // Usando Route Model Binding
+    public function show(SaidaEstoque $saidas_estoque) // <--- NOME DA VARIÁVEL IMPORTANTE
     {
-        $saidaEstoque->load(['estoque', 'atendimento.cliente']);
-        return view('saidas_estoque.show', compact('saidaEstoque')); // Garanta que 'saidaEstoque' está aqui
+        // $saidas_estoque já é a instância correta devido ao Route Model Binding.
+        // Apenas garanta que as relações necessárias estão carregadas.
+        $saidas_estoque->loadMissing(['estoque', 'atendimento.cliente']);
+
+        // Passe para a view com o nome que a view espera.
+        // Se a view espera $saidaEstoque, então use 'saidaEstoque'.
+        return view('saidas_estoque.show', ['saidaEstoque' => $saidas_estoque]);
     }
 
 
@@ -152,23 +170,40 @@ class SaidaEstoqueController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy($id)
+    public function destroy(SaidaEstoque $saidas_estoque) // <--- NOME DA VARIÁVEL IMPORTANTE
     {
-        // Buscamos a SaidaEstoque pelo ID. findOrFail irá retornar 404 se não encontrar.
-        $saidaEstoque = SaidaEstoque::findOrFail($id); // findOrFail é importante para lançar 404 se o ID não existir
+        if (Gate::denies('is-admin-or-tecnico')) {
+            return redirect()->route('saidas-estoque.index')->with('error', 'Acesso não autorizado para excluir saída.');
+        }
 
-        // Precisamos do objeto $saidaEstoque carregado para acessar estoque_id e quantidade
-        $estoque = Estoque::findOrFail($saidaEstoque->estoque_id);
+        $saidas_estoque->loadMissing('estoque');
 
-        // Antes de incrementar, garantimos que a quantidade é numérica
-        $cantidadParaIncrement = (int) $saidaEstoque->quantidade;
+        if (!$saidas_estoque->estoque) {
+            $idSaidaExcluida = $saidas_estoque->id;
+            $saidas_estoque->delete();
+            Log::warning("Saída de estoque #{$idSaidaExcluida} excluída, mas a peça original não foi encontrada no estoque para estorno.");
+            return redirect()->route('saidas-estoque.index')
+                ->with('warning', "Saída de estoque #{$idSaidaExcluida} excluída. A peça original não foi encontrada para estorno.");
+        }
 
-        // Ajusta a quantidade no estoque principal (incrementa ao excluir uma saída)
-        $estoque->increment('quantidade', $cantidadParaIncrement);
+        $estoque = $saidas_estoque->estoque;
+        $quantidadeParaIncrementar = (int) $saidas_estoque->quantidade;
+        $nomePeca = $estoque->nome;
+        $idSaida = $saidas_estoque->id;
 
-        // Exclui a saída de estoque
-        $saidaEstoque->delete();
+        DB::beginTransaction();
+        try {
+            $estoque->increment('quantidade', $quantidadeParaIncrementar);
+            $saidas_estoque->delete();
+            DB::commit();
 
-        return redirect()->route('saidas-estoque.index')->with('success', 'Saída de estoque excluída com sucesso!');
+            return redirect()->route('saidas-estoque.index')
+                ->with('success', "Saída de estoque #{$idSaida} ({$quantidadeParaIncrementar} unidade(s) de '{$nomePeca}') excluída e estoque estornado com sucesso!");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro ao excluir saída de estoque #{$idSaida}: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->route('saidas-estoque.index')
+                ->with('error', 'Ocorreu um erro ao excluir a saída de estoque. Tente novamente.');
+        }
     }
 }
