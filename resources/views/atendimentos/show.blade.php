@@ -3,276 +3,273 @@
 @section('title', 'Detalhes do Atendimento #' . $atendimento->id)
 
 @push('styles')
+    {{-- Estilos existentes --}}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        .card-header h5 {
-            font-weight: 500;
-        }
+        .card-header h5 { font-weight: 500; }
+        .dl-horizontal dt { float: left; width: 180px; font-weight: normal; color: #6c757d; clear: left; }
+        .dl-horizontal dd { margin-left: 200px; margin-bottom: .4rem; }
+        .badge.fs-6 { font-size: 0.9rem !important; padding: .4em .7em; }
+        .bg-light-subtle { background-color: #f8f9fa !important; }
+        .section-title { margin-bottom: 0.75rem; font-weight: bold; color: #495057; font-size: 1.1rem; }
+        .problem-box, .laudo-box, .obs-box { padding: 0.75rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background-color: #fdfdfd; white-space: pre-wrap; font-size: 0.9em; min-height: 60px; margin-bottom: 1rem; }
+        .actions-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+        .valor-destaque { font-size: 1.2em; font-weight: bold; }
 
-        .dl-horizontal dt {
+        /* Estilos para abas */
+        .nav-tabs .nav-link.active {
+            font-weight: bold;
+            /* Outros estilos para aba ativa */
+        }
+        .tab-content {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            padding: 1.25rem; /* Ajuste o padding conforme necessário */
+            border-bottom-left-radius: 0.375rem; /* Correspondendo ao card-radius do Bootstrap */
+            border-bottom-right-radius: 0.375rem;
+            background-color: #fff; /* Fundo branco para o conteúdo da aba */
+        }
+        .dl-horizontal-show dt {
             float: left;
-            width: 180px;
+            width: 160px;
             font-weight: normal;
             color: #6c757d;
             clear: left;
-        }
-
-        .dl-horizontal dd {
-            margin-left: 200px;
+            text-align: right;
+            padding-right: 10px;
             margin-bottom: .4rem;
         }
-
-        .badge.fs-6 {
-            font-size: 0.9rem !important;
-            padding: .4em .7em;
+        .dl-horizontal-show dd {
+            margin-left: 175px;
+            margin-bottom: .4rem;
+            font-weight: 500;
         }
 
-        .bg-light-subtle {
-            background-color: #f8f9fa !important;
-        }
-
-        .section-title {
-            margin-bottom: 0.75rem;
-            font-weight: bold;
-            color: #495057;
-            font-size: 1.1rem;
-        }
-
-        .problem-box,
-        .laudo-box,
-        .obs-box {
-            padding: 0.75rem;
-            border: 1px solid #dee2e6;
-            border-radius: 0.25rem;
-            background-color: #fdfdfd;
-            white-space: pre-wrap;
-            font-size: 0.9em;
-            min-height: 60px;
-            margin-bottom: 1rem;
-        }
-
-        .actions-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        .valor-destaque {
-            font-size: 1.2em;
-            font-weight: bold;
-        }
-
-        .item-servico-detalhado-row {
-            /* Estilos opcionais para cada linha de serviço, se necessário */
-        }
-
-        @media (max-width: 767.98px) {
-            #statusAtualTexto.badge {
-                font-size: 0.8rem !important;
-                padding: .3em .6em !important;
-                white-space: normal;
+        @media (max-width: 767.98px) { /* sm */
+            .dl-horizontal-show dt,
+            .dl-horizontal-show dd {
+                width: 100%;
+                float: none;
+                margin-left: 0;
                 text-align: left;
-                display: inline-block;
-                max-width: 100%;
             }
-            #statusAtualTexto.badge .bi {
-                font-size: 0.9em;
+            .dl-horizontal-show dt {
+                margin-bottom: 0.1rem;
+                font-weight: bold; /* Destaca o label em mobile */
             }
         }
-
-        @media (max-width: 575.98px) {
-            #statusAtualTexto.badge {
-                font-size: 0.75rem !important;
-                padding: .25em .5em !important;
+         @media (max-width: 575.98px) { /* xs */
+            .actions-header {
+                flex-direction: column;
+                align-items: flex-start;
             }
-            .dl-horizontal-responsive dt,
-            .dl-horizontal-responsive dd {
-                width: 100% !important;
-                float: none !important;
-                margin-left: 0 !important;
-                text-align: left !important;
+            .actions-header > div { /* Div dos botões de ação */
+                width: 100%;
+                margin-top: 0.5rem;
             }
-            .dl-horizontal-responsive dt {
-                margin-bottom: 0.1rem;
-                font-weight: bold;
-            }
-            .dl-horizontal-responsive dd {
+            .actions-header > div .btn {
+                width: 100%;
                 margin-bottom: 0.5rem;
+            }
+            .actions-header > div .d-inline { /* Para formulários inline */
+                display: block !important;
+                width: 100%;
+            }
+             .actions-header > div .d-inline .btn {
+                width: 100%;
             }
         }
     </style>
 @endpush
 
 @section('content')
-    <div class="container mt-0">
-        <div class="actions-header mb-3">
-            <h1>Detalhes: Atendimento <span class="text-primary">#{{ $atendimento->id }}</span></h1>
-            <div>
-                <a href="{{ route('atendimentos.pdf', $atendimento->id) }}" class="btn btn-sm btn-outline-info me-1"
-                    target="_blank" title="Gerar PDF/OS">
-                    <i class="bi bi-printer"></i> PDF/OS
-                </a>
-                <a href="{{ route('atendimentos.edit', $atendimento->id) }}" class="btn btn-sm btn-outline-warning me-1"
-                    title="Edição Completa do Atendimento">
-                    <i class="bi bi-pencil-square"></i> Editar Tudo
-                </a>
-                <a href="{{ route('atendimentos.index') }}" class="btn btn-sm btn-outline-secondary"
-                    title="Voltar para Lista">
-                    <i class="bi bi-list-ul"></i> Lista
-                </a>
-            </div>
+<div class="container mt-0">
+    {{-- CABEÇALHO DA PÁGINA E BOTÕES GLOBAIS --}}
+    <div class="actions-header mb-4">
+        <h1>Detalhes: Atendimento <span class="text-primary">#{{ $atendimento->id }}</span></h1>
+        <div>
+            <a href="{{ route('atendimentos.pdf', $atendimento->id) }}" class="btn btn-sm btn-outline-info me-1" target="_blank" title="Gerar PDF/OS">
+                <i class="bi bi-printer"></i> PDF/OS
+            </a>
+            <a href="{{ route('atendimentos.edit', $atendimento->id) }}" class="btn btn-sm btn-outline-warning me-1" title="Edição Completa do Atendimento">
+                <i class="bi bi-pencil-square"></i> Editar OS
+            </a>
+            <a href="{{ route('atendimentos.index') }}" class="btn btn-sm btn-outline-secondary" title="Voltar para Lista">
+                <i class="bi bi-list-ul"></i> Lista
+            </a>
         </div>
+    </div>
 
-        <div id="feedbackGlobalAtendimentoShow" class="mb-3"></div>
-        @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="bi bi-check-circle-fill me-2"></i>{{ session('success') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        @endif
-        @if(session('error'))
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('error') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        @endif
-         @if(session('info'))
-            <div class="alert alert-info alert-dismissible fade show" role="alert">
-                <i class="bi bi-info-circle-fill me-2"></i>{{ session('info') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        @endif
-        @if(session('warning'))
-            <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('warning') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        @endif
-        @if ($errors->hasBag('status_rapido_form'))
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <strong><i class="bi bi-exclamation-triangle-fill"></i> Erro ao atualizar status:</strong>
-                <ul class="mb-0 mt-1">
-                    @foreach ($errors->getBag('status_rapido_form')->all() as $message)
-                        <li>{{ $message }}</li>
-                    @endforeach
-                </ul>
-                <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        @endif
+    {{-- MENSAGENS DE FEEDBACK --}}
+    <div id="feedbackGlobalAtendimentoShow" class="mb-3"></div>
+    @if(session('success'))
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>{{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+    @if(session('info'))
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="bi bi-info-circle-fill me-2"></i>{{ session('info') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+    @if(session('warning'))
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ session('warning') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+    @if ($errors->hasBag('status_rapido_form'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong><i class="bi bi-exclamation-triangle-fill"></i> Erro ao atualizar status:</strong>
+            <ul class="mb-0 mt-1">
+                @foreach ($errors->getBag('status_rapido_form')->all() as $message)
+                    <li>{{ $message }}</li>
+                @endforeach
+            </ul>
+            <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
 
-        <div class="row">
-            {{-- COLUNA DA ESQUERDA (MAIS LARGA) --}}
-            <div class="col-lg-8">
-                {{-- CARD 1: INFORMAÇÕES PRINCIPAIS E STATUS --}}
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-header">
-                        <h5 class="my-1"><i class="bi bi-info-circle-fill me-2"></i>Informações do Atendimento</h5>
+    <div class="row">
+        {{-- COLUNA DA ESQUERDA (PRINCIPAL) --}}
+        <div class="col-lg-8">
+
+            {{-- CARD 1: RESUMO DO ATENDIMENTO --}}
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header"><h5 class="my-1"><i class="bi bi-person-badge-fill me-2"></i>Cliente e Aparelho</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="section-title">Dados do Cliente</h6>
+                            <dl class="dl-horizontal-show">
+                                <dt>Cliente:</dt>
+                                <dd>
+                                    @if($atendimento->cliente)
+                                        <a href="{{ route('clientes.show', $atendimento->cliente->id) }}">{{ $atendimento->cliente->nome_completo }}</a>
+                                    @else
+                                        <span class="text-muted">Não informado</span>
+                                    @endif
+                                </dd>
+                                <dt>CPF/CNPJ:</dt> <dd>{{ $atendimento->cliente->cpf_cnpj ?? 'N/A' }}</dd>
+                                <dt>Telefone:</dt> <dd>{{ $atendimento->cliente->telefone ?? 'Não informado' }}</dd>
+                                <dt>Cód. Consulta:</dt>
+                                <dd>
+                                    <span id="codigoConsultaParaCopiar" class="fw-bold user-select-all" style="cursor: pointer;" title="Clique para copiar">{{ $atendimento->codigo_consulta }}</span>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1 py-0 px-1" id="btnCopiarCodigo" title="Copiar código"><i class="bi bi-clipboard"></i></button>
+                                    <small id="mensagemCopiado" class="text-success ms-2" style="display: none;">Copiado!</small>
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="section-title">Dados do Aparelho</h6>
+                            <dl class="dl-horizontal-show">
+                                <dt>Descrição:</dt><dd>{{ $atendimento->descricao_aparelho }}</dd>
+                                <dt>Data Entrada:</dt><dd>{{ $atendimento->data_entrada->format('d/m/Y H:i') }}</dd>
+                                <dt>Problema Relatado:</dt><dd class="problem-box p-2 small">{{ $atendimento->problema_relatado }}</dd>
+                            </dl>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6 class="section-title">Dados do Cliente</h6>
-                                <dl class="dl-horizontal">
-                                    <dt>Cliente:</dt>
-                                    <dd>
-                                        @if($atendimento->cliente)
-                                            <a href="{{ route('clientes.show', $atendimento->cliente->id) }}">{{ $atendimento->cliente->nome_completo }}</a>
-                                        @else
-                                            <span class="text-muted">Não informado</span>
-                                        @endif
-                                    </dd>
-                                    <dt>CPF/CNPJ:</dt> <dd>{{ $atendimento->cliente->cpf_cnpj ?? 'N/A' }}</dd>
-                                    <dt>Telefone:</dt> <dd>{{ $atendimento->cliente->telefone ?? 'Não informado' }}</dd>
-                                    <dt>Cód. Consulta:</dt>
-                                    <dd>
-                                        <span id="codigoConsultaParaCopiar" class="fw-bold user-select-all" style="cursor: pointer;" title="Clique para copiar">{{ $atendimento->codigo_consulta }}</span>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1 py-0 px-1" id="btnCopiarCodigo" title="Copiar código"><i class="bi bi-clipboard"></i></button>
-                                        <small id="mensagemCopiado" class="text-success ms-2" style="display: none;">Copiado!</small>
-                                    </dd>
-                                </dl>
+                </div>
+            </div>
 
-                                <h6 class="section-title mt-3">Dados do Aparelho</h6>
-                                <dl class="dl-horizontal">
-                                    <dt>Descrição:</dt><dd>{{ $atendimento->descricao_aparelho }}</dd>
-                                    <dt>Data Entrada:</dt><dd>{{ $atendimento->data_entrada->format('d/m/Y H:i') }}</dd>
-                                    <dt>Problema Relatado:</dt><dd class="problem-box">{{ $atendimento->problema_relatado }}</dd>
-                                </dl>
-                            </div>
-                            <div class="col-md-6">
-                                <h6 class="section-title">Status e Responsáveis</h6>
-                                <div class="row mb-1">
-                                    <dt class="col-5 col-sm-4 col-md-5 col-lg-4 fw-normal text-muted small">Status Serviço:</dt>
-                                    <dd class="col-7 col-sm-8 col-md-7 col-lg-8 mb-0">
-                                        <span id="statusAtualTexto" class="badge rounded-pill fs-6 {{ App\Models\Atendimento::getStatusClass($atendimento->status) }}">
-                                            <i class="bi {{ App\Models\Atendimento::getStatusIcon($atendimento->status) }} me-1"></i>
-                                            <span id="statusAtualNome">{{ $atendimento->status }}</span>
-                                        </span>
-                                    </dd>
-                                </div>
-                                <div class="row mb-1">
-                                    <dt class="col-5 col-sm-4 col-md-5 col-lg-4 fw-normal text-muted small">Status Pag.:</dt>
-                                    <dd class="col-7 col-sm-8 col-md-7 col-lg-8 mb-0">
-                                        <span id="statusPagamentoTextoOuter">
-                                            @include('atendimentos.partials._status_pagamento_badge', ['status_pagamento' => ($atendimento->status_pagamento ?? 'Pendente')])
-                                        </span>
-                                    </dd>
-                                </div>
-                                <div class="row mb-1">
-                                    <dt class="col-5 col-sm-4 col-md-5 col-lg-4 fw-normal text-muted small">Técnico Resp.:</dt>
-                                    <dd class="col-7 col-sm-8 col-md-7 col-lg-8 mb-0" id="tecnicoAtualTexto">{{ $atendimento->tecnico->name ?? 'Não atribuído' }}</dd>
-                                </div>
-                                <div class="row">
-                                    <dt class="col-5 col-sm-4 col-md-5 col-lg-4 fw-normal text-muted small">Data Conclusão:</dt>
-                                    <dd class="col-7 col-sm-8 col-md-7 col-lg-8 mb-0">
-                                        {{ $atendimento->data_conclusao ? $atendimento->data_conclusao->format('d/m/Y') : ($atendimento->isFinalizadoParaLista() ? 'Concluído/Finalizado' : 'Pendente') }}
-                                    </dd>
-                                </div>
-                                @can('is-internal-user')
-                                    <div class="mt-3 mb-3 p-2 border rounded bg-light-subtle">
-                                        <form action="{{ route('atendimentos.atualizarStatus', $atendimento->id) }}" method="POST" id="formAtualizarStatusRapido">
-                                            @csrf
-                                            @method('PATCH')
-                                            <div class="row g-2 align-items-center">
-                                                <div class="col-12 col-md-auto mb-2 mb-md-0"><label for="status_rapido" class="form-label mb-0 fw-semibold small">Alterar Status Serviço:</label></div>
-                                                <div class="col-12 col-md">
-                                                    <select class="form-select form-select-sm" id="status_rapido" name="status">
-                                                        @foreach (App\Models\Atendimento::getPossibleStatuses() as $s)
-                                                            <option value="{{ $s }}" {{ $atendimento->status == $s ? 'selected' : '' }}>{{ $s }}</option>
-                                                        @endforeach
-                                                    </select>
-                                                </div>
-                                                <div class="col-12 col-md-auto"><button type="submit" class="btn btn-sm btn-primary w-100 w-md-auto"><i class="bi bi-check-lg"></i> Salvar</button></div>
+            {{-- CARD 2: STATUS E AÇÕES RÁPIDAS --}}
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header"><h5 class="my-1"><i class="bi bi-activity me-2"></i>Status e Acompanhamento</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="section-title">Situação Atual</h6>
+                            <dl class="dl-horizontal-show">
+                                <dt>Status Serviço:</dt>
+                                <dd>
+                                    <span id="statusAtualTexto" class="badge rounded-pill fs-6 {{ App\Models\Atendimento::getStatusClass($atendimento->status) }}">
+                                        <i class="bi {{ App\Models\Atendimento::getStatusIcon($atendimento->status) }} me-1"></i>
+                                        <span id="statusAtualNome">{{ $atendimento->status }}</span>
+                                    </span>
+                                </dd>
+                                <dt>Status Pag.:</dt>
+                                <dd>
+                                    <span id="statusPagamentoTextoOuter">
+                                        @include('atendimentos.partials._status_pagamento_badge', ['status_pagamento' => ($atendimento->status_pagamento ?? 'Pendente')])
+                                    </span>
+                                </dd>
+                                <dt>Técnico Resp.:</dt>
+                                <dd id="tecnicoAtualTexto">{{ $atendimento->tecnico->name ?? 'Não atribuído' }}</dd>
+                                <dt>Data Conclusão:</dt>
+                                <dd>
+                                    {{ $atendimento->data_conclusao ? $atendimento->data_conclusao->format('d/m/Y') : ($atendimento->isFinalizadoParaLista() ? 'Concluído/Finalizado' : 'Pendente') }}
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            @can('is-internal-user')
+                                <h6 class="section-title">Alteração Rápida de Status</h6>
+                                <div class="p-2 border rounded bg-light-subtle mb-3">
+                                    <form action="{{ route('atendimentos.atualizarStatus', $atendimento->id) }}" method="POST" id="formAtualizarStatusRapido">
+                                        @csrf
+                                        @method('PATCH')
+                                        <div class="row g-2 align-items-center">
+                                            <div class="col-12 col-md-auto mb-2 mb-md-0"><label for="status_rapido" class="form-label mb-0 fw-semibold small">Alterar Status Serviço:</label></div>
+                                            <div class="col-12 col-md">
+                                                <select class="form-select form-select-sm" id="status_rapido" name="status">
+                                                    @foreach (App\Models\Atendimento::getPossibleStatuses() as $s)
+                                                        <option value="{{ $s }}" {{ $atendimento->status == $s ? 'selected' : '' }}>{{ $s }}</option>
+                                                    @endforeach
+                                                </select>
                                             </div>
-                                        </form>
-                                    </div>
-                                @endcan
-                                <div id="containerBotaoRegistrarPagamento" class="mt-3">
-                                    {{-- Botão de pagamento é inserido aqui pelo JavaScript --}}
+                                            <div class="col-12 col-md-auto"><button type="submit" class="btn btn-sm btn-primary w-100 w-md-auto"><i class="bi bi-check-lg"></i> Salvar</button></div>
+                                        </div>
+                                    </form>
                                 </div>
+                            @endcan
+                             <div id="containerBotaoRegistrarPagamento" class="mt-2 d-grid">
+                                {{-- Botão de pagamento inserido aqui pelo JavaScript --}}
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {{-- CARD: Serviços Detalhados da OS --}}
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="my-1"><i class="bi bi-list-check me-2"></i>Serviços Detalhados da OS</h5>
-                        <div>
-                            @can('is-admin-or-tecnico')
-                                <button type="button" class="btn btn-success btn-sm py-0 px-1" id="adicionarServicoShow" title="Adicionar Novo Serviço">
-                                    <i class="bi bi-plus-lg"></i> Add Serviço
-                                </button>
-                                <button type="button" class="btn btn-primary btn-sm py-0 px-1 ms-1" id="salvarServicosShow" title="Salvar Alterações nos Serviços">
-                                    <i class="bi bi-save"></i> Salvar Serviços
-                                </button>
-                            @endcan
+            {{-- CARD 3: DETALHES OPERACIONAIS (COM ABAS) --}}
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header p-0 border-bottom-0">
+                    <ul class="nav nav-tabs nav-justified card-header-tabs" id="detalhesOsTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="servicos-tab" data-bs-toggle="tab" data-bs-target="#servicos-content" type="button" role="tab" aria-controls="servicos-content" aria-selected="true"><i class="bi bi-list-check me-1"></i> Serviços da OS</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="pecas-tab" data-bs-toggle="tab" data-bs-target="#pecas-content" type="button" role="tab" aria-controls="pecas-content" aria-selected="false"><i class="bi bi-tools me-1"></i> Peças Utilizadas</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="laudo-tab" data-bs-toggle="tab" data-bs-target="#laudo-content" type="button" role="tab" aria-controls="laudo-content" aria-selected="false"><i class="bi bi-clipboard2-pulse-fill me-1"></i> Laudo e Obs.</button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="tab-content" id="detalhesOsTabContent">
+                    {{-- Aba de Serviços --}}
+                    <div class="tab-pane fade show active" id="servicos-content" role="tabpanel" aria-labelledby="servicos-tab">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="section-title mb-0">Serviços Realizados/A Realizar</h6>
+                            <div>
+                                @can('is-admin-or-tecnico')
+                                    <button type="button" class="btn btn-success btn-sm py-0 px-1" id="adicionarServicoShow" title="Adicionar Novo Serviço">
+                                        <i class="bi bi-plus-lg"></i> Add Serviço
+                                    </button>
+                                    <button type="button" class="btn btn-primary btn-sm py-0 px-1 ms-1" id="salvarServicosShow" title="Salvar Alterações nos Serviços">
+                                        <i class="bi bi-save"></i> Salvar Serviços
+                                    </button>
+                                @endcan
+                            </div>
                         </div>
-                    </div>
-                    <div class="card-body">
-                        <form id="formServicosDetalhadosShow"> {{-- Apenas para agrupar --}}
+                        <form id="formServicosDetalhadosShow">
                             <div id="servicos-detalhados-container-show">
                                 @if($atendimento->servicosDetalhados && $atendimento->servicosDetalhados->isNotEmpty())
                                     @foreach($atendimento->servicosDetalhados as $index => $itemServico)
@@ -288,12 +285,41 @@
                         </form>
                         <div id="feedbackServicosShow" class="mt-2 small"></div>
                     </div>
-                </div>
-
-                {{-- CARD: DIAGNÓSTICO E SOLUÇÃO --}}
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-header"><h5 class="my-1"><i class="bi bi-clipboard2-pulse-fill me-2"></i>Diagnóstico e Solução</h5></div>
-                    <div class="card-body">
+                    {{-- Aba de Peças --}}
+                    <div class="tab-pane fade" id="pecas-content" role="tabpanel" aria-labelledby="pecas-tab">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="section-title mb-0">Peças Utilizadas no Atendimento</h6>
+                            @can('is-admin-or-tecnico')
+                                <a href="{{ route('saidas-estoque.create', ['atendimento_id' => $atendimento->id]) }}" class="btn btn-success btn-sm py-0 px-1" title="Adicionar Peça à OS"><i class="bi bi-plus-lg"></i> Add Peça</a>
+                            @endcan
+                        </div>
+                        @if ($atendimento->saidasEstoque && $atendimento->saidasEstoque->isNotEmpty())
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-hover mb-0">
+                                    <thead><tr><th>Peça (Modelo/Marca)</th><th class="text-center">Qtd</th><th class="text-end">Subtotal</th></tr></thead>
+                                    <tbody>
+                                        @foreach ($atendimento->saidasEstoque as $saida)
+                                        <tr>
+                                            <td>
+                                                <small @if(!$saida->estoque) class="text-danger" @endif>
+                                                    {{ $saida->estoque->nome ?? 'Peça Inválida' }}
+                                                    @if($saida->estoque && $saida->estoque->modelo_compativel) ({{ Str::limit($saida->estoque->modelo_compativel, 15) }})@endif
+                                                    @if($saida->estoque && $saida->estoque->marca) [{{ Str::limit($saida->estoque->marca, 10) }}]@endif
+                                                </small>
+                                            </td>
+                                            <td class="text-center"><small>{{ $saida->quantidade }}</small></td>
+                                            <td class="text-end"><small>R${{ number_format($saida->quantidade * ($saida->estoque->preco_venda ?? 0), 2, ',', '.') }}</small></td>
+                                        </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @else
+                            <p class="text-muted text-center small py-3">Nenhuma peça utilizada neste atendimento ainda.</p>
+                        @endif
+                    </div>
+                    {{-- Aba de Laudo e Observações --}}
+                    <div class="tab-pane fade" id="laudo-content" role="tabpanel" aria-labelledby="laudo-tab">
                         <h6 class="section-title">
                             Laudo Técnico / Solução Aplicada:
                             @can('is-admin-or-tecnico')<button type="button" class="btn btn-link btn-sm p-0 ms-1" id="btnEditarLaudo" title="Editar Laudo"><i class="bi bi-pencil-square"></i></button>@endcan
@@ -324,177 +350,104 @@
                 </div>
             </div>
 
-            {{-- COLUNA DA DIREITA (MAIS ESTREITA) --}}
-            <div class="col-lg-4">
-                {{-- CARD: PEÇAS UTILIZADAS --}}
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="my-1"><i class="bi bi-tools me-2"></i>Peças</h5>
-                        @can('is-admin-or-tecnico')
-                            <a href="{{ route('saidas-estoque.create', ['atendimento_id' => $atendimento->id]) }}" class="btn btn-success btn-sm py-0 px-1" title="Adicionar Peça"><i class="bi bi-plus-lg"></i> Add</a>
-                        @endcan
-                    </div>
-                    <div class="card-body p-0">
-                        @if ($atendimento->saidasEstoque && $atendimento->saidasEstoque->isNotEmpty())
-                            <div class="table-responsive"><table class="table table-sm table-striped table-hover mb-0"><tbody>
-                                @foreach ($atendimento->saidasEstoque as $saida)
-                                <tr>
-                                    <td><small @if(!$saida->estoque) class="text-danger" @endif>{{ $saida->estoque->nome ?? 'Peça Inválida' }} @if($saida->estoque && $saida->estoque->modelo_compativel)({{ Str::limit($saida->estoque->modelo_compativel, 15) }}) @endif</small></td>
-                                    <td class="text-center"><small>{{ $saida->quantidade }}</small></td>
-                                    <td class="text-end"><small>R${{ number_format($saida->quantidade * ($saida->estoque->preco_venda ?? 0), 2, ',', '.') }}</small></td>
-                                </tr>
-                                @endforeach
-                            </tbody></table></div>
-                        @else
-                            <div class="p-3 text-center"><small class="text-muted fst-italic">Nenhuma peça utilizada.</small></div>
-                        @endif
-                    </div>
-                </div>
+        </div> {{-- Fim col-lg-8 --}}
 
-                {{-- CARD: VALORES DO ATENDIMENTO --}}
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="my-1"><i class="bi bi-currency-dollar me-2"></i>Valores</h5>
-                        @can('is-admin')
-                            <button type="button" class="btn btn-outline-primary btn-sm py-0 px-1" id="btnEditarValoresServico" title="Editar Desconto Global da OS"><i class="bi bi-pencil"></i> Edit (Global)</button>
-                        @endcan
+        {{-- COLUNA DA DIREITA (FINANCEIRO E FINALIZAÇÃO) --}}
+        <div class="col-lg-4">
+            {{-- CARD: VALORES DO ATENDIMENTO --}}
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="my-1"><i class="bi bi-currency-dollar me-2"></i>Financeiro</h5>
+                    @can('is-admin')
+                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-1" id="btnEditarValoresServico" title="Editar Desconto Global da OS"><i class="bi bi-pencil"></i> Edit (Desc. Global)</button>
+                    @endcan
+                </div>
+                <div class="card-body">
+                    <div id="areaExibirValores">
+                        <dl class="dl-horizontal-show mb-0">
+                            <dt><small>Mão de Obra:</small></dt>
+                            <dd class="text-end" id="textoValorServico"><small>R$ {{ number_format($atendimento->valor_servico ?? 0, 2, ',', '.') }}</small></dd>
+                            <dt><small>Desconto Global OS:</small></dt>
+                            <dd class="text-end text-danger" id="textoDescontoServico"><small>- R$ {{ number_format($atendimento->desconto_servico ?? 0, 2, ',', '.') }}</small></dd>
+                            <dt class="fw-semibold"><small>Subtotal Serviço:</small></dt>
+                            <dd class="text-end fw-bold" id="textoSubtotalServico"><small>R$ {{ number_format($atendimento->valor_servico_liquido, 2, ',', '.') }}</small></dd>
+                            <dt class="mt-2"><small>Total Peças:</small></dt>
+                            <dd class="text-end mt-2" id="textoValorTotalPecas"><small>R$ {{ number_format($atendimento->valor_total_pecas, 2, ',', '.') }}</small></dd>
+                            <dt class="border-top pt-2 fs-6 text-success"><small>TOTAL OS:</small></dt>
+                            <dd class="text-end border-top pt-2 fs-5 fw-bolder text-success" id="textoValorTotalAtendimento">R$ {{ number_format($atendimento->valor_total_atendimento, 2, ',', '.') }}</dd>
+                        </dl>
                     </div>
-                    <div class="card-body">
-                        <div id="areaExibirValores">
-                            <dl class="dl-horizontal mb-0">
-                                <dt><small>Mão de Obra (Soma Serviços):</small></dt>
-                                <dd class="text-end" id="textoValorServico"><small>R$ {{ number_format($atendimento->valor_servico ?? 0, 2, ',', '.') }}</small></dd>
-                                <dt><small>Desconto Global OS:</small></dt>
-                                <dd class="text-end text-danger" id="textoDescontoServico"><small>- R$ {{ number_format($atendimento->desconto_servico ?? 0, 2, ',', '.') }}</small></dd>
-                                <dt class="fw-semibold"><small>Subtotal Serviço (Líquido):</small></dt>
-                                <dd class="text-end fw-bold" id="textoSubtotalServico"><small>R$ {{ number_format($atendimento->valor_servico_liquido, 2, ',', '.') }}</small></dd>
-                                <dt class="mt-2"><small>Total Peças:</small></dt>
-                                <dd class="text-end mt-2" id="textoValorTotalPecas"><small>R$ {{ number_format($atendimento->valor_total_pecas, 2, ',', '.') }}</small></dd>
-                                <dt class="border-top pt-2 fs-6 text-success"><small>TOTAL OS:</small></dt>
-                                <dd class="text-end border-top pt-2 fs-5 fw-bolder text-success" id="textoValorTotalAtendimento">R$ {{ number_format($atendimento->valor_total_atendimento, 2, ',', '.') }}</dd>
-                            </dl>
-                        </div>
-                        @can('is-admin')
-                            <div id="formEditarValoresServico" style="display:none;" class="mt-2 pt-2 border-top">
-                                <div class="mb-2">
-                                    <label for="inputValorServico" class="form-label form-label-sm fw-semibold">Valor Total Mão de Obra (R$):</label>
-                                    <input type="number" step="0.01" class="form-control form-control-sm bg-light" id="inputValorServico" value="{{ number_format($atendimento->valor_servico ?? 0, 2, '.', '') }}" readonly title="Este valor é a soma dos serviços detalhados. Edite os serviços para alterá-lo.">
-                                </div>
-                                <div class="mb-2">
-                                    <label for="inputDescontoServico" class="form-label form-label-sm fw-semibold">Desconto Global da OS (R$):</label>
-                                    <input type="number" step="0.01" class="form-control form-control-sm" id="inputDescontoServico" value="{{ number_format($atendimento->desconto_servico ?? 0, 2, '.', '') }}">
-                                </div>
-                                <button type="button" class="btn btn-sm btn-success me-1" id="btnSalvarValoresServico"><i class="bi bi-check-lg"></i> Salvar Desconto Global</button>
-                                <button type="button" class="btn btn-sm btn-secondary" id="btnCancelarValoresServico">Cancelar</button>
-                                <div id="feedbackValoresServico" class="mt-1 small d-inline-block"></div>
+                    @can('is-admin')
+                        <div id="formEditarValoresServico" style="display:none;" class="mt-2 pt-2 border-top">
+                            <div class="mb-2">
+                                <label for="inputValorServico" class="form-label form-label-sm fw-semibold">Valor Mão de Obra (R$):</label>
+                                <input type="number" step="0.01" class="form-control form-control-sm bg-light" id="inputValorServico" value="{{ number_format($atendimento->valor_servico ?? 0, 2, '.', '') }}" readonly title="Este valor é a soma dos serviços detalhados. Edite os serviços para alterá-lo.">
                             </div>
-                        @endcan
-                    </div>
-                </div>
-
-                {{-- CARD: FINALIZAÇÃO E HISTÓRICO --}}
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-header"><h5 class="my-1"><i class="bi bi-check2-square me-2"></i>Finalização e Histórico</h5></div>
-                    <div class="card-body">
-                        <p class="text-muted small mb-1">Criado em: {{ $atendimento->created_at->format('d/m/Y H:i') }}</p>
-                        <p class="text-muted small">Última atualização: {{ $atendimento->updated_at->format('d/m/Y H:i') }}</p>
-                        @can('is-admin') {{-- Somente admin pode excluir diretamente aqui, por exemplo --}}
-                            <form action="{{ route('atendimentos.destroy', $atendimento->id) }}" method="POST" class="d-grid mt-3">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-outline-danger"
-                                    onclick="return confirm('Tem certeza que deseja excluir este atendimento? Esta ação não poderá ser desfeita e não estorna peças automaticamente se já foram baixadas.')">
-                                    <i class="bi bi-trash"></i> Excluir Atendimento
-                                </button>
-                            </form>
-                        @endcan
-                    </div>
+                            <div class="mb-2">
+                                <label for="inputDescontoServico" class="form-label form-label-sm fw-semibold">Desconto Global da OS (R$):</label>
+                                <input type="number" step="0.01" class="form-control form-control-sm" id="inputDescontoServico" value="{{ number_format($atendimento->desconto_servico ?? 0, 2, '.', '') }}">
+                            </div>
+                            <button type="button" class="btn btn-sm btn-success me-1" id="btnSalvarValoresServico"><i class="bi bi-check-lg"></i> Salvar Desconto</button>
+                            <button type="button" class="btn btn-sm btn-secondary" id="btnCancelarValoresServico">Cancelar</button>
+                            <div id="feedbackValoresServico" class="mt-1 small d-inline-block"></div>
+                        </div>
+                    @endcan
                 </div>
             </div>
-        </div> {{-- Fim da row principal --}}
-    </div> {{-- Fim container --}}
 
-    {{-- MODAL PARA REGISTRAR PAGAMENTO (Simplificado) --}}
+            {{-- CARD: FINALIZAÇÃO E HISTÓRICO --}}
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header"><h5 class="my-1"><i class="bi bi-clock-history me-2"></i>Histórico e Ações</h5></div>
+                <div class="card-body">
+                    <dl class="dl-horizontal-show small">
+                        <dt>Criado em:</dt><dd>{{ $atendimento->created_at->format('d/m/Y H:i') }}</dd>
+                        <dt>Última atualização:</dt><dd>{{ $atendimento->updated_at->format('d/m/Y H:i') }}</dd>
+                    </dl>
+                    @can('is-admin')
+                        <form action="{{ route('atendimentos.destroy', $atendimento->id) }}" method="POST" class="d-grid mt-3">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                onclick="return confirm('Tem certeza que deseja excluir este atendimento? Esta ação não poderá ser desfeita e pode ter implicações no estoque e caixa se não tratada corretamente.')">
+                                <i class="bi bi-trash"></i> Excluir Atendimento
+                            </button>
+                        </form>
+                    @endcan
+                </div>
+            </div>
+
+        </div> {{-- Fim col-lg-4 --}}
+    </div> {{-- Fim da row principal --}}
+
+    {{-- MODAIS E TEMPLATES --}}
     @can('gerenciar-caixa')
-        <div class="modal fade" id="modalRegistrarPagamento" tabindex="-1" aria-labelledby="modalRegistrarPagamentoLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title" id="modalRegistrarPagamentoLabel"><i class="bi bi-cash-coin"></i> Registrar Pagamento - Atendimento #{{ $atendimento->id }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-                    <form id="formRegistrarPagamentoAtendimento">
-                        @csrf
-                        <div class="modal-body">
-                            <div id="feedbackModalPagamento" class="mb-3"></div>
-                            <div class="alert alert-info">
-                                <p class="mb-1"><strong>Cliente:</strong> {{ $atendimento->cliente->nome_completo ?? 'N/A' }}</p>
-                                <p class="mb-1"><strong>Aparelho:</strong> {{ $atendimento->descricao_aparelho }}</p>
-                                <p class="mb-0"><strong>Valor Total Original do Atendimento:</strong> <strong id="valorTotalOriginalDisplayModal">R$ {{ number_format($atendimento->valor_total_atendimento, 2, ',', '.') }}</strong></p>
-                            </div>
-                            <hr>
-                            <div class="mb-3 p-3 bg-light border rounded text-center">
-                                <p class="mb-1 fs-5">VALOR TOTAL A SER PAGO:</p>
-                                <h3 id="modalNovoValorTotalDevidoDisplay" class="text-primary fw-bold">R$ 0,00</h3>
-                                <hr class="my-2">
-                                <small class="d-block text-muted">Detalhes do valor:</small>
-                                <small class="d-block text-muted">Subtotal Serviço (M.Obra - Desc. Global): <span id="modalSubtotalServicoDisplay">R$ 0,00</span></small>
-                                <small class="d-block text-muted">(+) Total Peças: <span id="modalValorPecasDisplay">R$ 0,00</span></small>
-                            </div>
-                            <hr>
-                            <div class="mb-3">
-                                <label for="modal_forma_pagamento" class="form-label">Forma de Pagamento <span class="text-danger">*</span></label>
-                                <select class="form-select" id="modal_forma_pagamento" name="forma_pagamento" required>
-                                    <option value="">Selecione...</option>
-                                    @foreach($formasPagamentoDisponiveis as $opcao)
-                                        <option value="{{ $opcao }}" {{ old('forma_pagamento', $atendimento->forma_pagamento) == $opcao ? 'selected' : '' }}>{{ $opcao }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="modal_observacoes_pagamento" class="form-label">Observações do Pagamento (Opcional):</label>
-                                <textarea class="form-control" id="modal_observacoes_pagamento" name="observacoes_pagamento" rows="2"></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="submit" class="btn btn-success" id="btnConfirmarPagamentoModal"><i class="bi bi-check-circle-fill"></i> Confirmar Pagamento</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+        @include('atendimentos.partials._modal_registrar_pagamento', [
+            'atendimento' => $atendimento,
+            'formasPagamentoDisponiveis' => $formasPagamentoDisponiveis
+        ])
     @endcan
-
-    {{-- MODAL: Confirmação para Abrir Caixa --}}
-    <div class="modal fade" id="modalConfirmacaoAberturaCaixa" tabindex="-1" aria-labelledby="modalConfirmacaoAberturaCaixaLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title" id="modalConfirmacaoAberturaCaixaLabel"><i class="bi bi-box-arrow-in-right"></i> Caixa Fechado</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-                <div class="modal-body" id="modalConfirmarAbrirCaixaInfo">
-                    <p>Nenhum caixa aberto no momento.</p>
-                    <p>Deseja abrir um novo caixa agora para registrar esta entrada financeira?</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Não, depois</button>
-                    <button type="button" class="btn btn-success" id="btnConfirmarAberturaCaixa">Sim, abrir caixa</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- Template para os itens de serviço --}}
+    @include('atendimentos.partials._modal_confirmacao_abertura_caixa')
     <div id="atendimento-servico-item-template-show" style="display: none;">
         @include('atendimentos.partials._item_servico_template', ['index' => '__INDEX__'])
     </div>
 
+</div> {{-- Fim container --}}
 @endsection
 
 @push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
+    {{-- Todo o JavaScript existente, com atenção aos seletores dos novos elementos e abas. --}}
+    <script>
+        // O JavaScript completo da view original será colocado aqui,
+        // com adaptações para os novos IDs e a estrutura com abas.
+        // A lógica de exibição/ocultação de botões e formulários
+        // precisará considerar que alguns elementos agora estão dentro de abas.
+        // A função calcularESincronizarTotaisOSShow() continuará central para os valores.
+        document.addEventListener('DOMContentLoaded', function () {
     // 1. OBTENÇÃO DE ELEMENTOS DO DOM E VARIÁVEIS GLOBAIS
     const feedbackGlobal = document.getElementById('feedbackGlobalAtendimentoShow');
     const atendimentoId = "{{ $atendimento->id }}";
 
-    // Elementos da página principal que exibem os valores atuais do atendimento
+    // Elementos da página principal que exibem os valores financeiros
     const textoValorServicoPage = document.getElementById('textoValorServico')?.querySelector('small');
     const textoDescontoServicoPage = document.getElementById('textoDescontoServico')?.querySelector('small');
     const textoSubtotalServicoPage = document.getElementById('textoSubtotalServico')?.querySelector('small');
@@ -511,7 +464,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnCopiarCodigo = document.getElementById('btnCopiarCodigo');
     const mensagemCopiado = document.getElementById('mensagemCopiado');
 
-    // Edição inline Laudo e Observações
+    // Edição inline Laudo e Observações (dentro da aba 'laudo-content')
     const btnEditarLaudo = document.getElementById('btnEditarLaudo');
     const textoLaudoDisplay = document.getElementById('textoLaudo');
     const formEditarLaudo = document.getElementById('formEditarLaudo');
@@ -528,12 +481,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnCancelarObservacoes = document.getElementById('btnCancelarObservacoes');
     const feedbackObservacoes = document.getElementById('feedbackObservacoes');
 
-    // Edição inline de Valores Globais da OS
+    // Edição inline de Desconto Global da OS (no card Financeiro)
     const btnEditarValoresServicoPage = document.getElementById('btnEditarValoresServico');
     const areaExibirValoresPage = document.getElementById('areaExibirValores');
     const formEditarValoresPage = document.getElementById('formEditarValoresServico');
-    const inputValorServicoPage = document.getElementById('inputValorServico');       // Input para valor global do serviço (readonly, reflete soma)
-    const inputDescontoServicoPage = document.getElementById('inputDescontoServico'); // Input para desconto global da OS
+    const inputValorServicoPage = document.getElementById('inputValorServico'); // Input de mão de obra (readonly)
+    const inputDescontoServicoPage = document.getElementById('inputDescontoServico'); // Input de desconto global
     const btnSalvarValoresPage = document.getElementById('btnSalvarValoresServico');
     const btnCancelarValoresPage = document.getElementById('btnCancelarValoresServico');
     const feedbackValoresPage = document.getElementById('feedbackValoresServico');
@@ -554,7 +507,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const modalBootstrapConfirmacaoAbertura = modalConfirmacaoAberturaCaixa ? new bootstrap.Modal(modalConfirmacaoAberturaCaixa) : null;
     const modalConfirmarAbrirCaixaBody = document.getElementById('modalConfirmarAbrirCaixaInfo');
 
-    // Serviços Detalhados (Show)
+    // Serviços Detalhados (dentro da aba 'servicos-content')
     const containerServicosShow = document.getElementById('servicos-detalhados-container-show');
     const btnAdicionarServicoShow = document.getElementById('adicionarServicoShow');
     const btnSalvarServicosShow = document.getElementById('salvarServicosShow');
@@ -568,8 +521,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (statusPagamentoAtualJs === "") statusPagamentoAtualJs = "Pendente";
     const podeGerenciarCaixaJs = {{ Gate::allows('gerenciar-caixa') ? 'true' : 'false' }};
 
-    // 2. DEFINIÇÕES DE FUNÇÕES
-
+    // 2. DEFINIÇÕES DE FUNÇÕES (mantidas da versão anterior, com possíveis pequenos ajustes seletor)
     function exibirFeedbackGlobal(mensagem, tipo = 'success') {
         if (!feedbackGlobal) { console.warn("Elemento 'feedbackGlobalAtendimentoShow' não encontrado."); return; }
         feedbackGlobal.innerHTML = '';
@@ -589,7 +541,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function atualizarEstadoBotaoRegistrarPagamento() {
         const containerBtnPagamento = document.getElementById('containerBotaoRegistrarPagamento');
-        if (!containerBtnPagamento) { console.warn('Container do botão de pagamento não encontrado em atualizarEstadoBotaoRegistrarPagamento.'); return; }
+        if (!containerBtnPagamento) { console.warn('Container do botão de pagamento não encontrado.'); return; }
 
         const statusGeraisPermitemPagamento = ['Pronto para entrega', 'Aguardando aprovação cliente'];
         const statusPagamentoPermiteAcao = ['Pendente', 'Parcialmente Pago'];
@@ -607,14 +559,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let htmlBotao = '';
         if (permiteRegistrar) {
-            htmlBotao = `<button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalRegistrarPagamento"><i class="bi bi-cash-coin me-1"></i> Registrar Pagamento</button>`;
+            htmlBotao = `<button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#modalRegistrarPagamento"><i class="bi bi-cash-coin me-1"></i> Registrar Pagamento</button>`;
         } else if (mostrarDesabilitado) {
             htmlBotao = `
-            <button type="button" class="btn btn-outline-secondary" disabled title="Defina os valores e avance o status do serviço para habilitar o pagamento.">
+            <button type="button" class="btn btn-outline-secondary w-100" disabled title="Defina os valores e avance o status do serviço para habilitar o pagamento.">
                 <i class="bi bi-cash-coin me-1"></i> Registrar Pagamento
             </button>
-            <small class="d-block text-muted mt-1" style="font-size: 0.8em;">
-                O serviço precisa estar 'Pronto para entrega' ou 'Aguardando aprovação' (com valores definidos) para registrar o pagamento.
+            <small class="d-block text-muted mt-1 text-center" style="font-size: 0.8em;">
+                O serviço precisa estar 'Pronto para entrega' ou 'Aguardando aprovação' para registrar o pagamento.
             </small>`;
         }
         containerBtnPagamento.innerHTML = htmlBotao;
@@ -657,7 +609,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (body.success) {
                         let displayValue = body.novos_valores && typeof body.novos_valores[fieldName] !== 'undefined' ? body.novos_valores[fieldName] : placeholderText;
                         if(fieldName === 'observacoes' || fieldName === 'laudo_tecnico'){
-                            textDisplay.innerText = displayValue || placeholderText;
+                             // Para campos de texto com <pre>, melhor usar innerHTML para manter quebras de linha
+                            textDisplay.innerHTML = displayValue ? displayValue.replace(/\n/g, '<br>') : placeholderText;
                         } else {
                             textDisplay.innerText = displayValue;
                         }
@@ -698,18 +651,23 @@ document.addEventListener('DOMContentLoaded', function () {
             const valorUnitario = parseFloat(row.querySelector('.item-servico-valor-unitario').value) || 0;
             const subtotalItem = quantidade * valorUnitario;
             const subtotalDisplayEl = row.querySelector('.item-servico-subtotal-display');
-            if(subtotalDisplayEl) subtotalDisplayEl.textContent = subtotalItem.toFixed(2);
+            if(subtotalDisplayEl) subtotalDisplayEl.textContent = subtotalItem.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             totalServicosDetalhados += subtotalItem;
         });
 
+        // Atualiza o campo de Mão de Obra no card Financeiro
         if (textoValorServicoPage) {
             textoValorServicoPage.textContent = 'R$ ' + totalServicosDetalhados.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
-        if(inputValorServicoPage){ // Input do form de edição global
+        // Atualiza o input hidden/readonly de valor_servico no form de edição de desconto global
+        if(inputValorServicoPage){
             inputValorServicoPage.value = totalServicosDetalhados.toFixed(2);
         }
 
-        const descontoGlobalOsStr = inputDescontoServicoPage ? inputDescontoServicoPage.value : (textoDescontoServicoPage ? textoDescontoServicoPage.textContent.replace('- R$ ', '').replace(/\./g, '').replace(',', '.') : '0');
+        // Pega o desconto global (do input se estiver editando, ou do display se não)
+        const descontoGlobalOsStr = inputDescontoServicoPage && formEditarValoresPage.style.display === 'block'
+                                  ? inputDescontoServicoPage.value
+                                  : (textoDescontoServicoPage ? textoDescontoServicoPage.textContent.replace('- R$ ', '').replace(/\./g, '').replace(',', '.') : '0');
         const descontoGlobalOs = parseFloat(descontoGlobalOsStr.replace(',', '.')) || 0;
 
         const subtotalServicoLiquido = totalServicosDetalhados - descontoGlobalOs;
@@ -717,6 +675,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const totalPecas = parseFloat(totalPecasStr) || 0;
         const totalOS = subtotalServicoLiquido + totalPecas;
 
+        // Atualiza os displays no card Financeiro
         if (textoSubtotalServicoPage) {
             textoSubtotalServicoPage.textContent = 'R$ ' + subtotalServicoLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
@@ -742,9 +701,11 @@ document.addEventListener('DOMContentLoaded', function () {
         modalNovoValorTotalDevidoDisplay.textContent = 'R$ ' + valorTotalOsAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // 3. EVENT LISTENERS E EXECUÇÃO INICIAL
-    atualizarEstadoBotaoRegistrarPagamento();
 
+    // 3. EVENT LISTENERS E EXECUÇÃO INICIAL
+    atualizarEstadoBotaoRegistrarPagamento(); // Estado inicial do botão de pagamento
+
+    // Configuração dos listeners de edição inline para Laudo e Observações
     @can('is-admin-or-tecnico')
         if(btnEditarLaudo) {
             setupInlineEdit({
@@ -766,6 +727,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     @endcan
 
+    // Listener para o formulário de atualização rápida de status
     const formAtualizarStatusRapido = document.getElementById('formAtualizarStatusRapido');
     if (formAtualizarStatusRapido && statusAtualTextoSpan && statusAtualNomeSpan) {
         formAtualizarStatusRapido.addEventListener('submit', function (event) {
@@ -808,16 +770,21 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // Listeners para copiar código de consulta
     if (codigoConsultaSpan) codigoConsultaSpan.addEventListener('click', executarCopia);
     if (btnCopiarCodigo) btnCopiarCodigo.addEventListener('click', executarCopia);
 
+    // Inicializar Tooltips do Bootstrap
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
 
+    // Listeners para edição de valores globais (Desconto)
     if (btnEditarValoresServicoPage && areaExibirValoresPage && formEditarValoresPage) {
         btnEditarValoresServicoPage.addEventListener('click', function () {
             areaExibirValoresPage.style.display = 'none'; formEditarValoresPage.style.display = 'block';
+            // Preenche o input de valor_servico (readonly) com o valor atual dos itens
             if (inputValorServicoPage && textoValorServicoPage) inputValorServicoPage.value = (parseFloat(textoValorServicoPage.textContent.replace('R$ ', '').replace(/\./g, '').replace(',', '.')) || 0).toFixed(2);
+            // Preenche o input de desconto com o valor atual
             if (inputDescontoServicoPage && textoDescontoServicoPage) inputDescontoServicoPage.value = (parseFloat(textoDescontoServicoPage.textContent.replace('- R$ ', '').replace(/\./g, '').replace(',', '.')) || 0).toFixed(2);
             if (feedbackValoresPage) feedbackValoresPage.innerHTML = '';
             btnEditarValoresServicoPage.style.display = 'none';
@@ -831,6 +798,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (btnSalvarValoresPage) {
             btnSalvarValoresPage.addEventListener('click', function () {
+                // O valor_servico a ser enviado é a soma dos itens, já presente no inputValorServicoPage (readonly)
                 const valorServicoSomaItens = parseFloat(inputValorServicoPage.value) || 0;
                 const novoDescontoServicoGlobal = parseFloat(inputDescontoServicoPage.value) || 0;
 
@@ -841,26 +809,29 @@ document.addEventListener('DOMContentLoaded', function () {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'), 'Accept': 'application/json' },
                     body: JSON.stringify({
-                        valor_servico: valorServicoSomaItens.toFixed(2),
+                        valor_servico: valorServicoSomaItens.toFixed(2), // Envia o valor da soma dos itens como 'valor_servico'
                         desconto_servico: novoDescontoServicoGlobal.toFixed(2)
                     })
                 })
                 .then(response => response.json().then(data => ({ statusHttp: response.status, body: data })))
                 .then(({ statusHttp, body }) => {
                     if (body.success && body.novos_valores) {
-                        if (textoValorServicoPage) textoValorServicoPage.textContent = body.novos_valores.valor_servico;
-                        if (textoDescontoServicoPage) textoDescontoServicoPage.textContent = body.novos_valores.desconto_servico;
-                        if (textoSubtotalServicoPage) textoSubtotalServicoPage.textContent = body.novos_valores.subtotal_servico;
+                        // Atualiza os displays da página com os novos valores retornados pelo backend
+                        if (textoValorServicoPage) textoValorServicoPage.textContent = body.novos_valores.valor_servico; // Mão de obra (soma dos serviços)
+                        if (textoDescontoServicoPage) textoDescontoServicoPage.textContent = body.novos_valores.desconto_servico; // Desconto global
+                        if (textoSubtotalServicoPage) textoSubtotalServicoPage.textContent = body.novos_valores.subtotal_servico; // Mão de obra - Desconto global
+                        // O total de peças não é alterado aqui, mas o total do atendimento sim
                         if (textoValorTotalAtendimentoPage) textoValorTotalAtendimentoPage.textContent = body.novos_valores.valor_total_atendimento;
                         exibirFeedbackGlobal(body.message, 'success');
-                        calcularESincronizarTotaisOSShow();
+                        // Não precisa chamar calcularESincronizarTotaisOSShow() aqui pois os valores já foram atualizados pelo backend
+                        // e os displays refletem isso.
                     } else {
-                        exibirFeedbackGlobal(body.message || 'Erro ao salvar valores globais.', 'danger');
+                        exibirFeedbackGlobal(body.message || 'Erro ao salvar desconto global.', 'danger');
                     }
                 })
                 .catch(error => {
-                    console.error('Erro AJAX (salvar valores globais):', error);
-                    exibirFeedbackGlobal('Erro de comunicação ao salvar valores globais.', 'danger');
+                    console.error('Erro AJAX (salvar desconto global):', error);
+                    exibirFeedbackGlobal('Erro de comunicação ao salvar desconto global.', 'danger');
                 })
                 .finally(() => {
                     areaExibirValoresPage.style.display = 'block'; formEditarValoresPage.style.display = 'none';
@@ -871,7 +842,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Serviços Detalhados (Show)
+    // Serviços Detalhados (Aba)
     if (btnAdicionarServicoShow && templateServicoShow && containerServicosShow) {
         btnAdicionarServicoShow.addEventListener('click', function() {
             if (nenhumServicoMsgShow) nenhumServicoMsgShow.style.display = 'none';
@@ -883,7 +854,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 novaLinha.querySelector('.item-servico-valor-unitario').addEventListener('input', calcularESincronizarTotaisOSShow);
             }
             itemServicoOsShowIndex++;
-            calcularESincronizarTotaisOSShow();
+            calcularESincronizarTotaisOSShow(); // Recalcula após adicionar
         });
     }
 
@@ -894,15 +865,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (containerServicosShow.querySelectorAll('.item-servico-detalhado-row').length === 0 && nenhumServicoMsgShow) {
                     nenhumServicoMsgShow.style.display = 'block';
                 }
-                calcularESincronizarTotaisOSShow();
+                calcularESincronizarTotaisOSShow(); // Recalcula após remover
             }
         });
+        // Adiciona listeners para os inputs de quantidade e valor unitário dos itens de serviço
         containerServicosShow.querySelectorAll('.item-servico-quantidade, .item-servico-valor-unitario').forEach(input => {
             input.addEventListener('input', calcularESincronizarTotaisOSShow);
         });
     }
 
-    if(inputDescontoServicoPage) { // Listener para o campo de desconto global da OS
+    // Listener para o campo de desconto global da OS (quando alterado no form de edição de desconto)
+    if(inputDescontoServicoPage) {
         inputDescontoServicoPage.addEventListener('input', calcularESincronizarTotaisOSShow);
     }
 
@@ -930,13 +903,15 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(({ statusHttp, body }) => {
                 if (body.success) {
                     feedbackServicosShow.innerHTML = `<span class="text-success small">${body.message}</span>`;
+                    // Atualiza os displays de valores na página com os totais retornados pelo backend
                     if (body.novos_valores_atendimento) {
                         if (textoValorServicoPage) textoValorServicoPage.textContent = body.novos_valores_atendimento.valor_servico_formatado;
                         if (textoDescontoServicoPage) textoDescontoServicoPage.textContent = body.novos_valores_atendimento.desconto_servico_formatado;
                         if (textoSubtotalServicoPage) textoSubtotalServicoPage.textContent = body.novos_valores_atendimento.subtotal_servico_formatado;
                         if (textoValorTotalAtendimentoPage) textoValorTotalAtendimentoPage.textContent = body.novos_valores_atendimento.valor_total_atendimento_formatado;
                     }
-                    if(body.itens_servico_atualizados && containerServicosShow && templateServicoShow){ // Adicionado templateServicoShow aqui
+                    // Recarrega os itens de serviço para garantir que os IDs estão corretos (se houver novos itens)
+                    if(body.itens_servico_atualizados && containerServicosShow && templateServicoShow){
                         containerServicosShow.innerHTML = '';
                         itemServicoOsShowIndex = 0;
                         if(body.itens_servico_atualizados.length > 0){
@@ -950,7 +925,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                     novaLinha.querySelector('.item-servico-descricao').value = itemData.descricao_servico;
                                     novaLinha.querySelector('.item-servico-quantidade').value = itemData.quantidade;
                                     novaLinha.querySelector('.item-servico-valor-unitario').value = parseFloat(itemData.valor_unitario).toFixed(2);
-                                    novaLinha.querySelector('.item-servico-subtotal-display').textContent = parseFloat(itemData.subtotal_servico).toFixed(2);
+                                    novaLinha.querySelector('.item-servico-subtotal-display').textContent = parseFloat(itemData.subtotal_servico).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                    // Reatribui listeners para os novos campos
                                     novaLinha.querySelector('.item-servico-quantidade').addEventListener('input', calcularESincronizarTotaisOSShow);
                                     novaLinha.querySelector('.item-servico-valor-unitario').addEventListener('input', calcularESincronizarTotaisOSShow);
                                 }
@@ -960,7 +936,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             if(nenhumServicoMsgShow) nenhumServicoMsgShow.style.display = 'block';
                         }
                     }
-                     calcularESincronizarTotaisOSShow();
+                    calcularESincronizarTotaisOSShow(); // Garante que os totais gerais são atualizados
                 } else {
                     let errorMsg = body.message || 'Erro ao salvar serviços.';
                     if (body.errors) {
@@ -977,12 +953,12 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .finally(() => {
                 btnSalvarServicosShow.disabled = false;
-                setTimeout(() => { if(feedbackServicosShow) feedbackServicosShow.innerHTML = ''; }, 4000);
+                setTimeout(() => { if(feedbackServicosShow) feedbackServicosShow.innerHTML = ''; }, 5000);
             });
         });
     }
 
-    // Modal de Pagamento e Verificação de Caixa
+    // Lógica do Modal de Pagamento e Verificação de Caixa
     const containerBotaoPagamento = document.getElementById('containerBotaoRegistrarPagamento');
     if (containerBotaoPagamento && modalBootstrapInstance && modalBootstrapConfirmacaoAbertura) {
         containerBotaoPagamento.addEventListener('click', function(event) {
@@ -996,7 +972,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(response => response.json())
             .then(data => {
                 if (data.caixa_aberto) {
-                    popularEcalcularTotaisModal();
+                    popularEcalcularTotaisModal(); // Popula o modal com os valores atuais da OS
                     modalBootstrapInstance.show();
                 } else {
                     if (modalConfirmarAbrirCaixaBody) {
@@ -1004,22 +980,12 @@ document.addEventListener('DOMContentLoaded', function () {
                             <p>Nenhum caixa aberto no momento.</p>
                             <p>O valor de <strong>${valorTotalOsTexto}</strong> referente a este atendimento precisa ser lançado.</p>
                             <p>Deseja abrir um novo caixa agora?</p>`;
-                        const btnConfirmarAberturaCaixa = document.getElementById('btnConfirmarAberturaCaixa'); // Re-obter para garantir
+                        const btnConfirmarAberturaCaixa = document.getElementById('btnConfirmarAberturaCaixa');
                         if (btnConfirmarAberturaCaixa) {
                             const novoBtn = btnConfirmarAberturaCaixa.cloneNode(true);
                             btnConfirmarAberturaCaixa.parentNode.replaceChild(novoBtn, btnConfirmarAberturaCaixa);
-                            
                             novoBtn.addEventListener('click', function() {
-                                let urlAbrirCaixa = "{{ route('caixa.create') }}";
-                                let params = new URLSearchParams();
-                                if (valorTotalOsFloat > 0) {
-                                    params.append('primeira_mov_valor', valorTotalOsFloat.toFixed(2));
-                                    params.append('primeira_mov_descricao', `Referente ao Atendimento #${atendimentoId}`);
-                                    const formaPagamentoEl = document.getElementById('modal_forma_pagamento');
-                                    params.append('primeira_mov_forma_pagamento', formaPagamentoEl ? formaPagamentoEl.value : '{{ $atendimento->forma_pagamento ?? "Dinheiro" }}');
-                                    params.append('primeira_mov_obs', `Pagamento do Atendimento #${atendimentoId} a ser lançado.`);
-                                }
-                                window.location.href = urlAbrirCaixa + (params.toString() ? '?' + params.toString() : '');
+                                window.location.href = "{{ route('caixa.create') }}"; // Simplificado para redirecionar para abrir caixa
                             });
                         }
                         modalBootstrapConfirmacaoAbertura.show();
@@ -1038,6 +1004,26 @@ document.addEventListener('DOMContentLoaded', function () {
         formRegistrarPagamentoModal.addEventListener('submit', function (event) {
             event.preventDefault();
             const formData = new FormData(formRegistrarPagamentoModal);
+            // É importante que o modal envie os valores corretos de serviço e desconto
+            // que estão atualmente na OS, não os que estavam quando a página carregou,
+            // pois podem ter sido alterados pelos "Serviços Detalhados" ou "Desconto Global".
+            // Os accessors do Model Atendimento (valor_servico, desconto_servico, etc.) serão usados no backend
+            // após ele buscar o $atendimento. O que precisamos garantir é que o $atendimento no backend
+            // tenha os valores corretos de servicosDetalhados e desconto_servico ANTES do cálculo do caixa.
+            // O método registrarPagamentoAjax no AtendimentoController já recebe valor_servico e desconto_servico
+            // do formulário do modal. Se esses campos não existem no modal, eles precisam ser adicionados
+            // ou o controller precisa buscar os valores atuais do $atendimento->valor_servico e $atendimento->desconto_servico.
+            // Para simplificar, vamos assumir que o backend pega os valores do $atendimento já atualizados.
+            // A função popularEcalcularTotaisModal já coloca os valores atuais da OS no modal,
+            // então precisamos garantir que esses valores sejam submetidos.
+            // Adicionando os valores atuais de serviço e desconto ao FormData
+            const valorServicoFinal = parseFloat(textoValorServicoPage.textContent.replace('R$ ', '').replace(/\./g, '').replace(',', '.')) || 0;
+            const descontoServicoFinal = parseFloat(textoDescontoServicoPage.textContent.replace('- R$ ', '').replace(/\./g, '').replace(',', '.')) || 0;
+
+            formData.append('valor_servico', valorServicoFinal.toFixed(2));
+            formData.append('desconto_servico', descontoServicoFinal.toFixed(2));
+
+
             const url = "{{ route('atendimentos.registrarPagamentoAjax', $atendimento->id) }}";
             const originalButtonHtml = btnConfirmarPagamentoModal.innerHTML;
             btnConfirmarPagamentoModal.disabled = true;
@@ -1053,6 +1039,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(({ statusHttp, body }) => {
                 if (body.success) {
                     if (feedbackModalPagamento) feedbackModalPagamento.innerHTML = `<div class="alert alert-success small p-2">${body.message}</div>`;
+                    // Atualiza todos os displays da página com os novos valores
                     if (body.novos_valores_atendimento) {
                         if (textoValorServicoPage) textoValorServicoPage.textContent = body.novos_valores_atendimento.valor_servico;
                         if (textoDescontoServicoPage) textoDescontoServicoPage.textContent = body.novos_valores_atendimento.desconto_servico;
@@ -1062,25 +1049,30 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                         if (textoValorTotalAtendimentoPage) textoValorTotalAtendimentoPage.textContent = body.novos_valores_atendimento.valor_total_atendimento;
                     }
+                    // Atualiza status de pagamento
                     if (body.novo_status_pagamento_html && statusPagamentoOuterContainer) {
                         statusPagamentoOuterContainer.innerHTML = body.novo_status_pagamento_html;
                         if (body.novo_status_pagamento_texto) statusPagamentoAtualJs = body.novo_status_pagamento_texto;
                     }
+                    // Atualiza status do serviço (se mudou)
                     if (body.novo_status_servico_texto && body.novo_status_servico_html && statusAtualTextoSpan && statusAtualNomeSpan) {
                         statusAtualNomeSpan.textContent = body.novo_status_servico_texto;
-                        statusAtualTextoSpan.className = '';
+                        statusAtualTextoSpan.className = ''; // Limpa classes antigas
                         statusAtualTextoSpan.classList.add('badge', 'rounded-pill', 'fs-6');
+                        // Extrai e aplica as classes do HTML do badge retornado
                         const classesStatusServico = body.novo_status_servico_html.match(/class="([^"]+)"/);
                         if (classesStatusServico && classesStatusServico[1]) {
                              classesStatusServico[1].split(' ').forEach(cls => {
                                 if(!statusAtualTextoSpan.classList.contains(cls)) statusAtualTextoSpan.classList.add(cls);
                              });
                         }
+                        // Extrai e aplica o ícone do HTML do badge retornado
                         const iconMatchServico = body.novo_status_servico_html.match(/<i class="([^"]+) me-1"><\/i>/);
                         const iconElementServico = statusAtualTextoSpan.querySelector('i');
                         if(iconMatchServico && iconElementServico){
                             iconElementServico.className = iconMatchServico[1] + ' me-1';
                         } else if (iconElementServico && body.novo_status_servico_html.includes('bi-')) {
+                            // Fallback para tentar pegar a classe do ícone se a regex falhar mas um ícone existir
                             const tempDiv = document.createElement('div');
                             tempDiv.innerHTML = body.novo_status_servico_html;
                             const iTag = tempDiv.querySelector('i.bi');
@@ -1088,14 +1080,15 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                         statusGeralAtualJs = body.novo_status_servico_texto;
                     }
+                    // Atualiza observações
                     if (body.observacoes_atualizadas && textoObservacoesDisplay) {
-                        textoObservacoesDisplay.innerHTML = body.observacoes_atualizadas;
+                        textoObservacoesDisplay.innerHTML = body.observacoes_atualizadas.replace(/\n/g, '<br>');
                     }
-                    atualizarEstadoBotaoRegistrarPagamento();
+                    atualizarEstadoBotaoRegistrarPagamento(); // Atualiza o estado do botão de pagamento principal
                     setTimeout(() => {
                         if (modalBootstrapInstance) modalBootstrapInstance.hide();
-                        exibirFeedbackGlobal(body.message, 'success');
-                    }, 1500);
+                        exibirFeedbackGlobal(body.message, 'success'); // Mostra feedback global na página
+                    }, 5000);
                 } else {
                     let errorMessages = body.message || 'Ocorreu um erro.';
                     if (body.errors) {
@@ -1117,11 +1110,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Chamada inicial para calcular totais se houver itens de serviço ao carregar
+    // Chamada inicial para calcular totais (caso haja itens de serviço ao carregar a página)
     if (containerServicosShow && (containerServicosShow.querySelectorAll('.item-servico-detalhado-row').length > 0 || (nenhumServicoMsgShow && nenhumServicoMsgShow.style.display === 'none'))) {
         calcularESincronizarTotaisOSShow();
     }
 
 }); // Fim do DOMContentLoaded
-</script>
+    </script>
 @endpush

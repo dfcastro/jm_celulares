@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Caixa;
 use App\Models\MovimentacaoCaixa;
 use App\Notifications\AtendimentoProntoNotification;
+use Illuminate\Support\Facades\Validator;
 use App\Models\Estoque;
 use App\Models\SaidaEstoque;
 
