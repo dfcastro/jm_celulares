@@ -214,40 +214,60 @@ class EstoqueController extends Controller
                 ->with('error', 'Ocorreu um erro inesperado: ' . $e->getMessage());
         }
     }
-    public function historicoPeca(Estoque $estoque)
+    public function historicoPeca(Request $request, Estoque $estoque) // Adicionado Request para filtros futuros
     {
-        // Buscar todas as entradas relacionadas a esta peça
-        $entradas = $estoque->entradasEstoque()->orderBy('data_entrada', 'desc')->get();
+        // Subquery para Entradas
+        $entradasQuery = DB::table('entradas_estoque')
+            ->select(
+                DB::raw("'Entrada' as tipo_movimentacao_label"),
+                'id as movimentacao_id', // Alias para padronizar
+                'quantidade',
+                'data_entrada as data_movimentacao',
+                'observacoes',
+                DB::raw("NULL as atendimento_id"), // Coluna para compatibilidade com saídas
+                DB::raw("NULL as cliente_atendimento") // Coluna para compatibilidade
+            )
+            ->where('estoque_id', $estoque->id);
 
-        // Buscar todas as saídas relacionadas a esta peça
-        $saidas = $estoque->saidasEstoque()->with('atendimento')->orderBy('data_saida', 'desc')->get();
+        // Subquery para Saídas
+        $saidasQuery = DB::table('saidas_estoque')
+            ->leftJoin('atendimentos', 'saidas_estoque.atendimento_id', '=', 'atendimentos.id')
+            ->leftJoin('clientes', 'atendimentos.cliente_id', '=', 'clientes.id')
+            ->select(
+                DB::raw("'Saída' as tipo_movimentacao_label"),
+                'saidas_estoque.id as movimentacao_id', // Alias
+                'saidas_estoque.quantidade',
+                'saidas_estoque.data_saida as data_movimentacao',
+                'saidas_estoque.observacoes',
+                'saidas_estoque.atendimento_id',
+                'clientes.nome_completo as cliente_atendimento'
+            )
+            ->where('saidas_estoque.estoque_id', $estoque->id);
 
-        // Vamos juntar as entradas e saídas para mostrar em ordem cronológica
-        // Primeiro, formatamos cada uma para incluir o tipo e data/hora
-        $movimentacoes = $entradas->map(function ($entrada) {
-            return [
-                'tipo' => 'Entrada',
-                'quantidade' => $entrada->quantidade,
-                'data' => $entrada->data_entrada, // Carbon instance
-                'observacoes' => $entrada->observacoes,
-                'relacionado' => null, // Entradas não estão diretamente ligadas a atendimentos na sua estrutura
-            ];
-        })->concat($saidas->map(function ($saida) {
-            return [
-                'tipo' => 'Saída',
-                'quantidade' => $saida->quantidade,
-                'data' => $saida->data_saida, // Carbon instance
-                'observacoes' => $saida->observacoes,
-                'relacionado' => $saida->atendimento ? 'Atendimento #' . $saida->atendimento->id : 'Não Vinculado',
-            ];
-        }));
+        // Aplicar filtros (opcional, mas recomendado para consistência)
+        // Exemplo: Filtro por período
+        if ($request->filled('data_inicial_hist') && $request->filled('data_final_hist')) {
+            try {
+                $dataInicial = Carbon::parse($request->input('data_inicial_hist'))->startOfDay();
+                $dataFinal = Carbon::parse($request->input('data_final_hist'))->endOfDay();
+                if ($dataInicial->lte($dataFinal)) {
+                    $entradasQuery->whereBetween('data_entrada', [$dataInicial, $dataFinal]);
+                    $saidasQuery->whereBetween('data_saida', [$dataInicial, $dataFinal]);
+                }
+            } catch (\Exception $e) { /* Lidar com datas inválidas se necessário */ }
+        }
 
-        // Ordenar todas as movimentações por data (mais recente primeiro)
-        $movimentacoes = $movimentacoes->sortByDesc('data');
+        // Unir as queries
+        $movimentacoesQuery = $entradasQuery->unionAll($saidasQuery);
 
+        // Ordenar o resultado da união e paginar
+        // É preciso envolver a UNION em uma subquery para ordenar corretamente
+        $movimentacoesPaginadas = DB::query()->fromSub($movimentacoesQuery, 'sub')
+            ->orderBy('data_movimentacao', 'desc')
+            ->paginate(15) // Ou o número de itens por página que desejar
+            ->appends($request->query()); // Para manter os filtros na paginação
 
-        // Passa a peça e as movimentações para a view
-        return view('estoque.historico_peca', compact('estoque', 'movimentacoes'));
+        return view('estoque.historico_peca', compact('estoque', 'movimentacoesPaginadas', 'request'));
     }
 
     /**

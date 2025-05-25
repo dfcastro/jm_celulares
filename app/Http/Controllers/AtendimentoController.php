@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Atendimento;
 use App\Models\Cliente;
 use App\Models\User;
-// Removido: use App\Models\AtendimentoServico; // Não precisamos manipular AtendimentoServico diretamente no update principal
+use App\Models\AtendimentoServico; // Não precisamos manipular AtendimentoServico diretamente no update principal
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
@@ -206,7 +206,7 @@ class AtendimentoController extends Controller
      */
     public function show(Atendimento $atendimento)
     {
-        $atendimento->load(['cliente', 'tecnico', 'saidasEstoque.estoque']);
+        $atendimento->load(['cliente', 'tecnico', 'saidasEstoque.estoque', 'servicosDetalhados']); // Garante que servicosDetalhados está carregado
 
         $valorTotalPecasModal = 0;
         if ($atendimento->saidasEstoque && $atendimento->saidasEstoque->isNotEmpty()) {
@@ -223,6 +223,9 @@ class AtendimentoController extends Controller
         $valorServicoLiquidoModal = $valorServicoModal - $descontoServicoModal;
         $valorTotalDevidoModal = $valorServicoLiquidoModal + $valorTotalPecasModal;
 
+        // Flag para controle de edição de itens na view
+        $permitirEdicaoItens = !$atendimento->impedeEdicaoItens(); // Adicionado
+
         return view('atendimentos.show', compact(
             'atendimento',
             'formasPagamentoDisponiveis',
@@ -230,7 +233,8 @@ class AtendimentoController extends Controller
             'valorServicoModal',
             'descontoServicoModal',
             'valorServicoLiquidoModal',
-            'valorTotalDevidoModal'
+            'valorTotalDevidoModal',
+            'permitirEdicaoItens' // Passa a flag para a view
         ));
     }
 
@@ -244,11 +248,14 @@ class AtendimentoController extends Controller
         }
         $clientes = Cliente::orderBy('nome_completo')->get();
         $tecnicos = User::where('tipo_usuario', 'tecnico')->orderBy('name')->get();
-        // Carrega os relacionamentos para que os accessors (como valor_total_pecas) funcionem corretamente na view de edição
         $atendimento->load('servicosDetalhados', 'saidasEstoque.estoque');
         $formasPagamento = config('constants.formas_pagamento', ['Dinheiro', 'Cartão de Débito', 'Cartão de Crédito', 'PIX', 'Boleto', 'Outro']);
-
-        return view('atendimentos.edit', compact('atendimento', 'clientes', 'tecnicos', 'formasPagamento'));
+    
+        // Flag para controle de edição de itens na view
+        // Mesmo na edição completa, respeitamos o bloqueio se o status for finalizado.
+        $permitirEdicaoItens = !$atendimento->impedeEdicaoItens();
+    
+        return view('atendimentos.edit', compact('atendimento', 'clientes', 'tecnicos', 'formasPagamento', 'permitirEdicaoItens'));
     }
 
 
@@ -970,17 +977,23 @@ class AtendimentoController extends Controller
     }
     public function atualizarServicosDetalhadosAjax(Request $request, Atendimento $atendimento): \Illuminate\Http\JsonResponse
     {
-        if (Gate::denies('is-admin-or-tecnico')) { // Ou a permissão apropriada
-            return response()->json(['success' => false, 'message' => 'Você não tem permissão para editar os serviços.'], 403);
+        // VERIFICAÇÃO INICIAL PELO STATUS DO ATENDIMENTO E PERMISSÃO
+        if (!$atendimento->podeEditarServicosDetalhados(Auth::user())) { // Usa o novo método do Model
+            Log::warning("Tentativa de editar serviços detalhados do Atendimento #{$atendimento->id} que está em status '{$atendimento->status}' ou sem permissão.");
+            return response()->json([
+                'success' => false,
+                'message' => 'Não é possível editar os serviços deste atendimento no status atual (' . $atendimento->status . ') ou você não tem permissão.'
+            ], 403); // Forbidden
         }
-
+    
+        // Validação dos dados (como antes)
         $validatedData = $request->validate([
             'servicos_detalhados' => 'nullable|array',
-            'servicos_detalhados.*.id' => 'nullable|integer|exists:atendimento_servicos,id,atendimento_id,' . $atendimento->id, // Garante que o ID do item pertença ao atendimento
+            'servicos_detalhados.*.id' => 'nullable|integer|exists:atendimento_servicos,id,atendimento_id,' . $atendimento->id,
             'servicos_detalhados.*.descricao_servico' => 'required_with:servicos_detalhados|string|max:255',
             'servicos_detalhados.*.quantidade' => 'required_with:servicos_detalhados|integer|min:1',
             'servicos_detalhados.*.valor_unitario' => 'required_with:servicos_detalhados|numeric|min:0',
-        ], [
+        ],[
             'servicos_detalhados.*.descricao_servico.required_with' => 'A descrição de cada serviço é obrigatória.',
             'servicos_detalhados.*.quantidade.required_with' => 'A quantidade de cada serviço é obrigatória (mínimo 1).',
             'servicos_detalhados.*.valor_unitario.required_with' => 'O valor unitário de cada serviço é obrigatório.',
@@ -1032,11 +1045,11 @@ class AtendimentoController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Serviços detalhados atualizados com sucesso!',
-                'novos_valores_atendimento' => [ // Para atualizar os displays na página
+                'novos_valores_atendimento' => [
                     'valor_servico_formatado' => number_format($atendimento->valor_servico ?? 0, 2, ',', '.'),
                     'desconto_servico_formatado' => number_format($atendimento->desconto_servico ?? 0, 2, ',', '.'),
-                    'subtotal_servico_formatado' => number_format($atendimento->valor_servico_liquido, 2, ',', '.'), // Usa o accessor
-                    'valor_total_atendimento_formatado' => number_format($atendimento->valor_total_atendimento, 2, ',', '.'), // Usa o accessor
+                    'subtotal_servico_formatado' => number_format($atendimento->valor_servico_liquido, 2, ',', '.'),
+                    'valor_total_atendimento_formatado' => number_format($atendimento->valor_total_atendimento, 2, ',', '.'),
                 ],
                 'itens_servico_atualizados' => $atendimento->servicosDetalhados->toArray() // Para atualizar IDs no frontend se necessário
             ]);

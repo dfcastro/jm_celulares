@@ -330,4 +330,51 @@ class Atendimento extends Model
         }
         return false;
     }
+
+    /**
+     * Verifica se o atendimento está em um status que impede a edição de itens (serviços/peças).
+     *
+     * @return bool
+     */
+    public function impedeEdicaoItens(): bool
+    {
+        // Status que são considerados finais e não devem permitir alteração de serviços/peças.
+        $statusFinalizados = ['Entregue', 'Cancelado', 'Reprovado'];
+        return in_array($this->status, $statusFinalizados);
+    }
+
+    /**
+     * Verifica se o atendimento pode ter seus serviços detalhados editados.
+     * Além de não estar em status final, o usuário precisa ter permissão.
+     *
+     * @param User|null $user
+     * @return bool
+     */
+    public function podeEditarServicosDetalhados(User $user = null): bool
+    {
+        if ($this->impedeEdicaoItens()) {
+            return false;
+        }
+        // Adicione aqui qualquer outra lógica de permissão, como Gate
+        // Exemplo: return Gate::forUser($user ?: Auth::user())->allows('editar-servicos-atendimento', $this);
+        // Por agora, vamos permitir se não estiver finalizado e o usuário for interno com permissão básica.
+        $currentUser = $user ?: Auth::user();
+        return $currentUser && in_array($currentUser->tipo_usuario, ['admin', 'tecnico']);
+    }
+
+    /**
+     * Verifica se o atendimento pode ter peças adicionadas/removidas.
+     *
+     * @param User|null $user
+     * @return bool
+     */
+    public function podeEditarPecas(User $user = null): bool
+    {
+        if ($this->impedeEdicaoItens()) {
+            return false;
+        }
+        // Adicione aqui qualquer outra lógica de permissão, como Gate
+        $currentUser = $user ?: Auth::user();
+        return $currentUser && in_array($currentUser->tipo_usuario, ['admin', 'tecnico']);
+    }
 }
