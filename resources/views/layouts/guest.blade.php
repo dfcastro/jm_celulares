@@ -32,7 +32,7 @@
                 </a>
             </div>
 
-            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white dark:bg-gray-800 shadow-xl overflow-hidden sm:rounded-lg" style="border-top: 5px solid var(--jm-laranja, #FFA500);">
+            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white  shadow-xl overflow-hidden sm:rounded-lg" style="border-top: 5px solid var(--jm-laranja, #FFA500);">
                 {{-- Card com borda superior laranja --}}
                 {{ $slot }}
             </div>
